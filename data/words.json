@@ -1,0 +1,5 @@
+{
+    "programming": ["python", "variable", "function", "algorithm", "debugging", "compiler"],
+    "cebu_landmarks": ["magellan", "lapulapu", "kawasan", "osmena", "taois", "sinulog"],
+    "science": ["gravity", "molecule", "velocity", "photosynthesis", "atom", "neutron"]
+}

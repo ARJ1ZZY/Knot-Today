@@ -1,12 +1,22 @@
+# theme.py
 COLORS = {
-    "bg_dark": (25, 25, 25),
-    "bg_medium": (35, 35, 35),
-    "accent": (0, 255, 200),
-    "text_primary": (220, 220, 220),
-    "text_dim": (150, 150, 150),
-    "error": (255, 80, 80),
-    "success": (80, 255, 150),
-    "button": (50, 50, 50),
-    "button_hover": (70, 70, 70),
-    "button_text": (200, 200, 200)
+    "nebula_deep": (8, 12, 36),
+    "nebula_mid": (22, 28, 68),
+    "nebula_light": (45, 52, 105),
+    "nebula_accent": (88, 101, 242),
+    "violet_deep": (46, 16, 56),
+    "violet_glow": (138, 79, 255),
+    "cyan_glow": (0, 255, 255),
+    "text_primary": (255, 255, 255),
+    "text_secondary": (200, 210, 255),
+    "text_muted": (120, 130, 180),
+    "error": (255, 71, 87),
+    "success": (46, 213, 115),
+    "warning": (255, 184, 43),
+    "glass_dark": (20, 25, 60, 180),
+    "glass_medium": (30, 38, 80, 200),
+    "glass_light": (50, 60, 110, 220),
+    "glass_border": (100, 120, 200, 60),
+    "shadow": (0, 0, 0, 180),
+    "overlay": (0, 0, 0, 160)
 }

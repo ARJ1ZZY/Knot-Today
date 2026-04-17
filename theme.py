@@ -6,6 +6,8 @@ COLORS = {
     "text_dim": (150, 150, 150),
     "error": (255, 80, 80),
     "success": (80, 255, 150),
+    "yellow": (255, 255, 0),
+    "orange": (255, 165, 0),
     "button": (50, 50, 50),
     "button_hover": (70, 70, 70),
     "button_text": (200, 200, 200)

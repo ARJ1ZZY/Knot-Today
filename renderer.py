@@ -12,55 +12,69 @@ class PygameRenderer:
         self.buttons = self._create_keyboard_buttons()
         self.hovered_button = None
         self.message = ""
-        self.message_timer = 0
+        self.message_end_time = 0
+        self.flash_end_time = 0
 
     def _create_keyboard_buttons(self):
         buttons = {}
         letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        start_x = (s.SCREEN_WIDTH - (10 * (s.BUTTON_WIDTH + s.BUTTON_MARGIN))) // 2
+        rows = [letters[0:10], letters[10:20], letters[20:]]
+        start_y = s.SCREEN_HEIGHT - 200
         
-        for i, letter in enumerate(letters):
-            row = i // 10
-            col = i % 10
-            x = start_x + col * (s.BUTTON_WIDTH + s.BUTTON_MARGIN)
-            y = s.SCREEN_HEIGHT - 150 + row * (s.BUTTON_HEIGHT + s.BUTTON_MARGIN)
-            buttons[letter] = pygame.Rect(x, y, s.BUTTON_WIDTH, s.BUTTON_HEIGHT)
+        for row_idx, row_letters in enumerate(rows):
+            row_count = len(row_letters)
+            row_width = row_count * s.BUTTON_WIDTH + (row_count - 1) * s.BUTTON_MARGIN
+            row_start_x = (s.SCREEN_WIDTH - row_width) // 2
+            y = start_y + row_idx * (s.BUTTON_HEIGHT + s.BUTTON_MARGIN)
+            
+            for col, letter in enumerate(row_letters):
+                x = row_start_x + col * (s.BUTTON_WIDTH + s.BUTTON_MARGIN)
+                buttons[letter] = pygame.Rect(x, y, s.BUTTON_WIDTH, s.BUTTON_HEIGHT)
         
         return buttons
 
     def draw_hangman(self, lives, max_lives):
-        base_x = 150
-        base_y = 250
+        base_x = s.SCREEN_WIDTH // 2 - 40
+        base_y = 120
+        
+        if lives == 1:
+            color = theme.COLORS["error"]
+        elif lives == 2:
+            color = theme.COLORS["orange"]
+        elif lives == 3:
+            color = theme.COLORS["yellow"]
+        else:
+            color = theme.COLORS["text_primary"]
         
         # Gallows
-        pygame.draw.line(self.screen, theme.COLORS["text_primary"], (base_x, base_y + 150), (base_x + 80, base_y + 150), 4)
-        pygame.draw.line(self.screen, theme.COLORS["text_primary"], (base_x + 20, base_y), (base_x + 20, base_y + 150), 4)
-        pygame.draw.line(self.screen, theme.COLORS["text_primary"], (base_x + 20, base_y), (base_x + 80, base_y), 4)
-        pygame.draw.line(self.screen, theme.COLORS["text_primary"], (base_x + 80, base_y), (base_x + 80, base_y + 30), 4)
+        pygame.draw.line(self.screen, color, (base_x, base_y + 150), (base_x + 80, base_y + 150), 4)
+        pygame.draw.line(self.screen, color, (base_x + 20, base_y), (base_x + 20, base_y + 150), 4)
+        pygame.draw.line(self.screen, color, (base_x + 20, base_y), (base_x + 80, base_y), 4)
+        pygame.draw.line(self.screen, color, (base_x + 80, base_y), (base_x + 80, base_y + 30), 4)
         
         mistakes = max_lives - lives
         
         if mistakes >= 1:  # Head
-            pygame.draw.circle(self.screen, theme.COLORS["text_primary"], (base_x + 80, base_y + 45), 15, 3)
+            pygame.draw.circle(self.screen, color, (base_x + 80, base_y + 45), 15, 3)
         if mistakes >= 2:  # Body
-            pygame.draw.line(self.screen, theme.COLORS["text_primary"], (base_x + 80, base_y + 60), (base_x + 80, base_y + 100), 3)
+            pygame.draw.line(self.screen, color, (base_x + 80, base_y + 60), (base_x + 80, base_y + 100), 3)
         if mistakes >= 3:  # Left arm
-            pygame.draw.line(self.screen, theme.COLORS["text_primary"], (base_x + 80, base_y + 70), (base_x + 60, base_y + 85), 3)
+            pygame.draw.line(self.screen, color, (base_x + 80, base_y + 70), (base_x + 60, base_y + 85), 3)
         if mistakes >= 4:  # Right arm
-            pygame.draw.line(self.screen, theme.COLORS["text_primary"], (base_x + 80, base_y + 70), (base_x + 100, base_y + 85), 3)
+            pygame.draw.line(self.screen, color, (base_x + 80, base_y + 70), (base_x + 100, base_y + 85), 3)
         if mistakes >= 5:  # Left leg
-            pygame.draw.line(self.screen, theme.COLORS["text_primary"], (base_x + 80, base_y + 100), (base_x + 60, base_y + 130), 3)
+            pygame.draw.line(self.screen, color, (base_x + 80, base_y + 100), (base_x + 60, base_y + 130), 3)
         if mistakes >= 6:  # Right leg
-            pygame.draw.line(self.screen, theme.COLORS["text_primary"], (base_x + 80, base_y + 100), (base_x + 100, base_y + 130), 3)
+            pygame.draw.line(self.screen, color, (base_x + 80, base_y + 100), (base_x + 100, base_y + 130), 3)
 
     def draw_word_display(self, display_word):
         text = self.font_large.render(display_word, True, theme.COLORS["accent"])
-        text_rect = text.get_rect(center=(s.SCREEN_WIDTH // 2, 400))
+        text_rect = text.get_rect(center=(s.SCREEN_WIDTH // 2, 300))
         self.screen.blit(text, text_rect)
 
     def draw_guessed_letters(self, guessed):
         text = self.font_small.render(f"Guessed: {' '.join(guessed) if guessed else 'None'}", True, theme.COLORS["text_dim"])
-        text_rect = text.get_rect(center=(s.SCREEN_WIDTH // 2, 450))
+        text_rect = text.get_rect(center=(s.SCREEN_WIDTH // 2, 350))
         self.screen.blit(text, text_rect)
 
     def draw_buttons(self, guessed):
@@ -87,15 +101,30 @@ class PygameRenderer:
             self.screen.blit(text, text_rect)
 
     def draw_lives(self, lives, max_lives):
-        text = self.font_medium.render(f"Lives: {lives}/{max_lives}", True, theme.COLORS["text_primary"])
+        if lives == 1:
+            color = theme.COLORS["error"]
+        elif lives == 2:
+            color = theme.COLORS["orange"]
+        elif lives == 3:
+            color = theme.COLORS["yellow"]
+        else:
+            color = theme.COLORS["text_primary"]
+        text = self.font_medium.render(f"Lives: {lives}/{max_lives}", True, color)
         text_rect = text.get_rect(topleft=(20, 20))
         self.screen.blit(text, text_rect)
 
     def draw_message(self):
-        if self.message:
+        if self.message and pygame.time.get_ticks() <= self.message_end_time:
             text = self.font_medium.render(self.message, True, theme.COLORS["error"])
-            text_rect = text.get_rect(center=(s.SCREEN_WIDTH // 2, 500))
+            text_rect = text.get_rect(center=(s.SCREEN_WIDTH // 2, 560))
             self.screen.blit(text, text_rect)
+        elif pygame.time.get_ticks() > self.message_end_time:
+            self.message = ""
+
+    def show_message(self, msg):
+        self.message = msg
+        self.message_end_time = pygame.time.get_ticks() + 1500
+        self.flash_end_time = pygame.time.get_ticks() + 500
 
     def draw_game_over(self, won, secret):
         overlay = pygame.Surface((s.SCREEN_WIDTH, s.SCREEN_HEIGHT))
@@ -125,6 +154,13 @@ class PygameRenderer:
 
     def draw(self, game_state):
         self.screen.fill(theme.COLORS["bg_dark"])
+        
+        # Red flash overlay for incorrect guesses
+        if pygame.time.get_ticks() <= self.flash_end_time:
+            flash_surface = pygame.Surface((s.SCREEN_WIDTH, s.SCREEN_HEIGHT))
+            flash_surface.set_alpha(100)
+            flash_surface.fill(theme.COLORS["error"])
+            self.screen.blit(flash_surface, (0, 0))
         
         self.draw_lives(game_state["lives"], game_state["max_lives"])
         self.draw_hangman(game_state["lives"], game_state["max_lives"])

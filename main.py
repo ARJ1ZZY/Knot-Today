@@ -28,7 +28,7 @@ def show_category_menu(renderer):
         title_rect = title.get_rect(center=(s.SCREEN_WIDTH // 2, 80))
         renderer.screen.blit(title, title_rect)
         
-        subtitle = renderer.font_medium.render("Select Category", True, theme.COLORS["text_primary"])
+        subtitle = renderer.font_medium.render("Select A Theme", True, theme.COLORS["text_primary"])
         subtitle_rect = subtitle.get_rect(center=(s.SCREEN_WIDTH // 2, 140))
         renderer.screen.blit(subtitle, subtitle_rect)
         

@@ -12,4 +12,8 @@ BUTTON_WIDTH = 40
 BUTTON_HEIGHT = 40
 BUTTON_MARGIN = 5
 
+# Sound settings
+SOUND_ENABLED = True
+SOUND_VOLUME = 0.5
+
 pygame.init()

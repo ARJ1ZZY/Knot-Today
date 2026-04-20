@@ -36,6 +36,18 @@ class HangmanGame:
     def get_display_word(self):
         return " ".join([ch if ch in self.guessed_letters else "_" for ch in self.secret_word])
 
+    def hint(self):
+        if self.game_over:
+            return False, "Game already finished."
+        
+        available_letters = [ch for ch in self.secret_word if ch not in self.guessed_letters]
+        if not available_letters:
+            return False, "No hints available."
+        
+        hint_letter = available_letters[0]  # Simple hint: first available letter
+        success, msg = self.guess(hint_letter)
+        return success, f"Hint: {hint_letter} - {msg}"
+
     def get_status(self):
         return {
             "lives": self.lives,

@@ -1,6 +1,7 @@
 import pygame
 import theme
 import settings as s
+from game_state import GameState
 
 class PygameRenderer:
     def __init__(self, screen):
@@ -14,6 +15,7 @@ class PygameRenderer:
         self.message = ""
         self.message_end_time = 0
         self.flash_end_time = 0
+        self.ui_buttons = []
 
     def _create_keyboard_buttons(self):
         buttons = {}
@@ -152,7 +154,7 @@ class PygameRenderer:
         prompt_rect = prompt.get_rect(center=(s.SCREEN_WIDTH // 2, s.SCREEN_HEIGHT // 2 + 60))
         self.screen.blit(prompt, prompt_rect)
 
-    def draw(self, game_state):
+    def draw(self, game_state, current_state=None, timer=0, high_score=0):
         self.screen.fill(theme.COLORS["bg_dark"])
         
         # Red flash overlay for incorrect guesses
@@ -162,15 +164,30 @@ class PygameRenderer:
             flash_surface.fill(theme.COLORS["error"])
             self.screen.blit(flash_surface, (0, 0))
         
-        self.draw_lives(game_state["lives"], game_state["max_lives"])
-        self.draw_hangman(game_state["lives"], game_state["max_lives"])
-        self.draw_word_display(game_state["display"])
-        self.draw_guessed_letters(game_state["guessed"])
-        self.draw_buttons(game_state["guessed"])
-        self.draw_message()
+        if game_state:
+            self.draw_lives(game_state["lives"], game_state["max_lives"])
+            self.draw_hangman(game_state["lives"], game_state["max_lives"])
+            self.draw_word_display(game_state["display"])
+            self.draw_guessed_letters(game_state["guessed"])
+            self.draw_buttons(game_state["guessed"])
+            self.draw_message()
+            
+            if game_state["game_over"]:
+                self.draw_game_over(game_state["won"], game_state["secret"])
         
-        if game_state["game_over"]:
-            self.draw_game_over(game_state["won"], game_state["secret"])
+        # Draw timer and high score
+        self.draw_timer(timer)
+        self.draw_high_score(high_score)
+        
+        # Draw state-specific UI
+        self.ui_buttons = []
+        if current_state == GameState.GAMEPLAY.value:
+            self.add_pause_button()
+            self.add_hint_button()
+        elif current_state == GameState.PAUSED.value:
+            self.add_pause_menu_buttons()
+        elif current_state == GameState.GAME_OVER.value:
+            self.add_game_over_buttons()
         
         pygame.display.flip()
         self.clock.tick(s.FPS)
@@ -185,16 +202,87 @@ class PygameRenderer:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if self.hovered_button:
                     return self.hovered_button
+                for action, rect in self.ui_buttons:
+                    if rect.collidepoint(event.pos):
+                        return action
             
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     return "quit"
                 if event.key == pygame.K_SPACE:
                     return "space"
+                if event.key == pygame.K_p:
+                    return "pause"
+                if event.key == pygame.K_h:
+                    return "hint"
+                if event.key == pygame.K_r:
+                    return "restart"
+                if event.key == pygame.K_m:
+                    return "main_menu"
                 if event.unicode.isalpha():
                     return event.unicode.upper()
         
         return None
 
-    def show_message(self, msg):
-        self.message = msg
+    def draw_timer(self, timer):
+        timer_text = f"Time: {timer:.1f}s"
+        text = self.font_small.render(timer_text, True, theme.COLORS["text_primary"])
+        self.screen.blit(text, (s.SCREEN_WIDTH // 2 - text.get_width() // 2, 10))
+    
+    def draw_high_score(self, high_score):
+        if high_score > 0:
+            hs_text = f"High Score: {high_score:.1f}s"
+            text = self.font_small.render(hs_text, True, theme.COLORS["text_primary"])
+            self.screen.blit(text, (s.SCREEN_WIDTH - text.get_width() - 10, 10))
+    
+    def add_pause_button(self):
+        rect = pygame.Rect(s.SCREEN_WIDTH - 100, 10, 80, 30)
+        self.ui_buttons.append(("pause", rect))
+        color = theme.COLORS["button_hover"] if rect.collidepoint(pygame.mouse.get_pos()) else theme.COLORS["button"]
+        pygame.draw.rect(self.screen, color, rect, border_radius=8)
+        text = self.font_small.render("Pause", True, theme.COLORS["button_text"])
+        text_rect = text.get_rect(center=rect.center)
+        self.screen.blit(text, text_rect)
+    
+    def add_hint_button(self):
+        rect = pygame.Rect(s.SCREEN_WIDTH - 100, s.SCREEN_HEIGHT - 50, 80, 30)
+        self.ui_buttons.append(("hint", rect))
+        color = theme.COLORS["button_hover"] if rect.collidepoint(pygame.mouse.get_pos()) else theme.COLORS["button"]
+        pygame.draw.rect(self.screen, color, rect, border_radius=8)
+        text = self.font_small.render("Hint", True, theme.COLORS["button_text"])
+        text_rect = text.get_rect(center=rect.center)
+        self.screen.blit(text, text_rect)
+    
+    def add_pause_menu_buttons(self):
+        # PAUSED text
+        pause_text = self.font_large.render("PAUSED", True, theme.COLORS["text_primary"])
+        rect = pause_text.get_rect(center=(s.SCREEN_WIDTH // 2, s.SCREEN_HEIGHT // 2 - 100))
+        self.screen.blit(pause_text, rect)
+        
+        # buttons
+        resume_rect = pygame.Rect(s.SCREEN_WIDTH // 2 - 100, s.SCREEN_HEIGHT // 2 - 50, 200, 45)
+        restart_rect = pygame.Rect(s.SCREEN_WIDTH // 2 - 100, s.SCREEN_HEIGHT // 2, 200, 45)
+        menu_rect = pygame.Rect(s.SCREEN_WIDTH // 2 - 100, s.SCREEN_HEIGHT // 2 + 50, 200, 45)
+        buttons = [("resume", resume_rect), ("restart", restart_rect), ("main_menu", menu_rect)]
+        for action, rect in buttons:
+            self.ui_buttons.append((action, rect))
+            color = theme.COLORS["button_hover"] if rect.collidepoint(pygame.mouse.get_pos()) else theme.COLORS["button"]
+            pygame.draw.rect(self.screen, color, rect, border_radius=8)
+            pygame.draw.rect(self.screen, theme.COLORS["accent"], rect, 2, border_radius=8)
+            text = self.font_medium.render(action.replace('_', ' ').title(), True, theme.COLORS["button_text"])
+            text_rect = text.get_rect(center=rect.center)
+            self.screen.blit(text, text_rect)
+    
+    def add_game_over_buttons(self):
+        # buttons
+        restart_rect = pygame.Rect(s.SCREEN_WIDTH // 2 - 100, s.SCREEN_HEIGHT // 2 + 50, 200, 45)
+        menu_rect = pygame.Rect(s.SCREEN_WIDTH // 2 - 100, s.SCREEN_HEIGHT // 2 + 100, 200, 45)
+        buttons = [("restart", restart_rect), ("main_menu", menu_rect)]
+        for action, rect in buttons:
+            self.ui_buttons.append((action, rect))
+            color = theme.COLORS["button_hover"] if rect.collidepoint(pygame.mouse.get_pos()) else theme.COLORS["button"]
+            pygame.draw.rect(self.screen, color, rect, border_radius=8)
+            pygame.draw.rect(self.screen, theme.COLORS["accent"], rect, 2, border_radius=8)
+            text = self.font_medium.render(action.replace('_', ' ').title(), True, theme.COLORS["button_text"])
+            text_rect = text.get_rect(center=rect.center)
+            self.screen.blit(text, text_rect)

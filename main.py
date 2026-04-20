@@ -3,7 +3,10 @@ import sys
 from game_logic import HangmanGame
 from renderer import PygameRenderer
 from utils import get_random_word, load_word_bank
+from game_state import StateManager, GameState
+from sound_manager import SoundManager
 import settings as s
+import time
 
 def show_category_menu(renderer):
     bank = load_word_bank()
@@ -66,49 +69,127 @@ def show_category_menu(renderer):
                     return None
 
 def main():
-    screen = pygame.display.set_mode((s.SCREEN_WIDTH, s.SCREEN_HEIGHT))
+    pygame.init()
+    screen = pygame.display.set_mode((s.SCREEN_WIDTH, s.SCREEN_HEIGHT), pygame.RESIZABLE)
     pygame.display.set_caption("Knot-Today")
     
     renderer = PygameRenderer(screen)
     clock = pygame.time.Clock()
+    state_manager = StateManager()
+    sound_manager = SoundManager()
     
     running = True
+    fullscreen = False
+    game = None
+    start_time = 0
+    paused_time = 0
+    pause_start = 0
+    high_score = 0  # Load from file if exists
+    game_over_sound_played = False
     
     while running:
-        category = show_category_menu(renderer)
-        if category is None and not pygame.get_init():
-            break
-        
-        secret = get_random_word(category)
-        game = HangmanGame(secret)
-        
-        while not game.game_over:
-            action = renderer.handle_events()
-            
-            if action == "quit":
+        if state_manager.get_state() == GameState.MAIN_MENU:
+            category = show_category_menu(renderer)
+            if category is not None:
+                secret = get_random_word(category)
+                game = HangmanGame(secret)
+                start_time = time.time()
+                paused_time = 0
+                game_over_sound_played = False
+                state_manager.change_state(GameState.GAMEPLAY)
+            else:
                 running = False
-                break
-            elif action and action.isalpha() and len(action) == 1:
-                success, msg = game.guess(action)
-                if not success:
+        
+        elif state_manager.get_state() == GameState.GAMEPLAY:
+            if game and not game.game_over:
+                action = renderer.handle_events()
+                
+                if action == "quit":
+                    running = False
+                elif action == "pause":
+                    pause_start = time.time()
+                    state_manager.change_state(GameState.PAUSED)
+                elif action == "hint":
+                    # Implement hint logic
+                    success, msg = game.hint()
+                    sound_manager.play("correct" if success else "wrong")
                     renderer.show_message(msg)
-            
-            renderer.draw(game.get_status())
+                elif action and action.isalpha() and len(action) == 1:
+                    success, msg = game.guess(action)
+                    sound_manager.play("correct" if success else "wrong")
+                    renderer.show_message(msg)
+                
+                renderer.draw(game.get_status(), state_manager.get_state().value, time.time() - start_time - paused_time, high_score)
+            else:
+                state_manager.change_state(GameState.GAME_OVER)
         
-        if not running:
-            break
-        
-        # Game over - wait for space
-        waiting = True
-        while waiting and running:
+        elif state_manager.get_state() == GameState.PAUSED:
             action = renderer.handle_events()
             if action == "quit":
                 running = False
-                waiting = False
-            elif action == "space":
-                waiting = False
+            elif action == "resume":
+                paused_time += time.time() - pause_start
+                state_manager.change_state(GameState.GAMEPLAY)
+            elif action == "restart":
+                if game:
+                    game.reset()
+                    start_time = time.time()
+                    paused_time = 0
+                    game_over_sound_played = False
+                    state_manager.change_state(GameState.GAMEPLAY)
+            elif action == "main_menu":
+                state_manager.change_state(GameState.MAIN_MENU)
             
-            renderer.draw(game.get_status())
+            renderer.draw(game.get_status() if game else None, state_manager.get_state().value, time.time() - start_time - paused_time, high_score)
+        
+        elif state_manager.get_state() == GameState.GAME_OVER:
+            if not game_over_sound_played:
+                if game and game.won:
+                    elapsed = time.time() - start_time - paused_time
+                    if elapsed < high_score or high_score == 0:
+                        high_score = elapsed
+                    sound_manager.play("win")
+                else:
+                    sound_manager.play("lose")
+                game_over_sound_played = True
+            
+            action = renderer.handle_events()
+            if action == "quit":
+                running = False
+            elif action == "restart":
+                if game:
+                    game.reset()
+                    start_time = time.time()
+                    paused_time = 0
+                    game_over_sound_played = False
+                    state_manager.change_state(GameState.GAMEPLAY)
+            elif action == "main_menu":
+                state_manager.change_state(GameState.MAIN_MENU)
+            
+            renderer.draw(game.get_status(), state_manager.get_state().value, time.time() - start_time - paused_time, high_score)
+        
+        # Handle global events
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_F11:
+                    fullscreen = not fullscreen
+                    if fullscreen:
+                        screen = pygame.display.set_mode((s.SCREEN_WIDTH, s.SCREEN_HEIGHT), pygame.FULLSCREEN)
+                    else:
+                        screen = pygame.display.set_mode((s.SCREEN_WIDTH, s.SCREEN_HEIGHT), pygame.RESIZABLE)
+                    renderer.screen = screen
+                elif event.key == pygame.K_m:
+                    sound_manager.toggle_mute()
+            elif event.type == pygame.VIDEORESIZE:
+                s.SCREEN_WIDTH = event.w
+                s.SCREEN_HEIGHT = event.h
+                screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
+                renderer.screen = screen
+                renderer._create_keyboard_buttons()  # Recreate buttons for new size
+        
+        clock.tick(s.FPS)
     
     pygame.quit()
     sys.exit()

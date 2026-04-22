@@ -168,27 +168,6 @@ def main():
             
             renderer.draw(game.get_status(), state_manager.get_state().value, time.time() - start_time - paused_time, high_score)
         
-        # Handle global events
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_F11:
-                    fullscreen = not fullscreen
-                    if fullscreen:
-                        screen = pygame.display.set_mode((s.SCREEN_WIDTH, s.SCREEN_HEIGHT), pygame.FULLSCREEN)
-                    else:
-                        screen = pygame.display.set_mode((s.SCREEN_WIDTH, s.SCREEN_HEIGHT), pygame.RESIZABLE)
-                    renderer.screen = screen
-                elif event.key == pygame.K_m:
-                    sound_manager.toggle_mute()
-            elif event.type == pygame.VIDEORESIZE:
-                s.SCREEN_WIDTH = event.w
-                s.SCREEN_HEIGHT = event.h
-                screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
-                renderer.screen = screen
-                renderer._create_keyboard_buttons()  # Recreate buttons for new size
-        
         clock.tick(s.FPS)
     
     pygame.quit()

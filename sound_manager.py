@@ -23,10 +23,10 @@ class SoundManager:
     def _load_sounds(self):
         sound_files = {
             "click": "click.wav",
-            "correct": "correct.wav",
-            "wrong": "wrong.wav",
+            "correct": "correct.mp3",
+            "wrong": "wrong.mp3",
             "win": "win.wav",
-            "lose": "lose.wav"
+            "lose": "lose.m4a"
         }
         
         sound_dir = os.path.join("assets", "sounds")

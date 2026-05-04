@@ -1,3 +1,4 @@
+# ui.py
 from utils import clear_screen
 
 class TerminalRenderer:
@@ -75,16 +76,16 @@ class TerminalRenderer:
         max_lives = status["max_lives"]
         lives = status["lives"]
 
-        # ASCII Hangman
         hangman_idx = min(max_lives - lives, len(cls.HANGMAN_STATES) - 1)
         print(cls.HANGMAN_STATES[hangman_idx])
 
-        print(f"\nLives: {lives}/{max_lives}")
-        print(f"\nWord: {status['display']}")
-        print(f"\nGuessed: {' '.join(status['guessed']) if status['guessed'] else 'None'}")
+        print(f"\n❤️ Lives: {lives}/{max_lives}")
+        print(f"\n📝 Word: {status['display']}")
+        print(f"\n🔤 Guessed: {' '.join(status['guessed']) if status['guessed'] else 'None'}")
+        print(f"\n⭐ Score: {status['score']}")
 
         if status["game_over"]:
             if status["won"]:
-                print("\n=== YOU WIN! ===")
+                print("\n🎉 YOU WIN! 🎉")
             else:
-                print(f"\n=== GAME OVER ===\nWord was: {status['secret']}")
+                print(f"\n💔 GAME OVER\nWord was: {status['secret']}")

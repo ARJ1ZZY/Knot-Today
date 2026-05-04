@@ -26,7 +26,8 @@ class SoundManager:
             "correct": "correct.wav",
             "wrong": "wrong.wav",
             "win": "win.wav",
-            "lose": "lose.wav"
+            "lose": "lose.wav",
+            "hint": "hint.wav"
         }
         
         sound_dir = os.path.join("assets", "sounds")
@@ -56,4 +57,4 @@ class SoundManager:
         return self.enabled
     
     def get_mute_text(self):
-        return "Unmute" if not self.enabled else "Mute"
+        return "🔊 Unmute" if not self.enabled else "🔇 Mute"

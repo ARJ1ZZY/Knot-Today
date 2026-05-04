@@ -3,8 +3,9 @@ import random
 from utils import calculate_points
 
 class HangmanGame:
-    def __init__(self, secret_word, max_lives=6):
+    def __init__(self, secret_word, category=None, max_lives=6):
         self.secret_word = secret_word.upper()
+        self.category = category
         self.max_lives = max_lives
         self.hint_cost = 50
         self.reset()
@@ -16,26 +17,34 @@ class HangmanGame:
         self.won = False
         self.score = 0
         self.streak = 0
+        self.last_guess_correct = None
+        self.last_guess_letter = None
+        self.newly_revealed_positions = []
 
     def guess(self, letter):
         if self.game_over:
-            return False, "Game finished", 0
+            return False, "Game finished", 0, []
         
         letter = letter.upper()
         if letter in self.guessed_letters:
-            return False, "Already guessed", 0
+            return False, "Already guessed", 0, []
         
         self.guessed_letters.add(letter)
+        self.last_guess_letter = letter
         
         if letter not in self.secret_word:
             self.lives -= 1
             self.streak = 0
+            self.last_guess_correct = False
+            self.newly_revealed_positions = []
             if self.lives <= 0:
                 self.game_over = True
                 self.won = False
-            return False, "Wrong!", 0
+            return False, "Wrong!", 0, []
         
-        count = self.secret_word.count(letter)
+        self.last_guess_correct = True
+        self.newly_revealed_positions = [i for i, ch in enumerate(self.secret_word) if ch == letter]
+        count = len(self.newly_revealed_positions)
         self.streak += 1
         points = calculate_points(self.secret_word, True, self.streak) * count
         self.score += points
@@ -43,9 +52,8 @@ class HangmanGame:
         if all(ch in self.guessed_letters for ch in self.secret_word):
             self.game_over = True
             self.won = True
-            self.score += 100
         
-        return True, f"+{points}", points
+        return True, f"+{points}", points, self.newly_revealed_positions
 
     def can_afford_hint(self):
         return self.score >= self.hint_cost and not self.game_over
@@ -75,5 +83,6 @@ class HangmanGame:
             "score": self.score,
             "streak": self.streak,
             "hint_cost": self.hint_cost,
-            "can_afford_hint": self.can_afford_hint()
+            "can_afford_hint": self.can_afford_hint(),
+            "category": self.category
         }

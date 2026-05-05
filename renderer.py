@@ -102,6 +102,7 @@ class PygameRenderer:
             text_rect = text.get_rect(center=rect.center)
             self.screen.blit(text, text_rect)
 
+    # Rendering/drawing the lives display on screen
     def draw_lives(self, lives, max_lives):
         if lives == 1:
             color = theme.COLORS["error"]
@@ -142,16 +143,19 @@ class PygameRenderer:
             color = theme.COLORS["error"]
         
         lines = msg.split('\n')
-        y_offset = s.SCREEN_HEIGHT // 2 - 40
-        
+        y_offset = s.SCREEN_HEIGHT // 2 - 150  # move message higher
+
         for line in lines:
             text = self.font_large.render(line, True, color)
             text_rect = text.get_rect(center=(s.SCREEN_WIDTH // 2, y_offset))
             self.screen.blit(text, text_rect)
             y_offset += 50
-        
+
+        # Reserve space for buttons (assume they are around mid-screen + 50)
+        button_area_y = s.SCREEN_HEIGHT // 2 + 50
+
         prompt = self.font_medium.render("Press SPACE to play again", True, theme.COLORS["text_primary"])
-        prompt_rect = prompt.get_rect(center=(s.SCREEN_WIDTH // 2, s.SCREEN_HEIGHT // 2 + 60))
+        prompt_rect = prompt.get_rect(center=(s.SCREEN_WIDTH // 2, button_area_y // 2 + 80))
         self.screen.blit(prompt, prompt_rect)
 
     def draw(self, game_state, current_state=None, timer=0, high_score=0):
@@ -204,6 +208,7 @@ class PygameRenderer:
                     return self.hovered_button
                 for action, rect in self.ui_buttons:
                     if rect.collidepoint(event.pos):
+                        # Missing statement in the button click handler
                         return action
             
             if event.type == pygame.KEYDOWN:

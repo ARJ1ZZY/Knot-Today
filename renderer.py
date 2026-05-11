@@ -1,3 +1,6 @@
+from email.mime import text
+from turtle import width
+
 import pygame
 import theme
 import settings as s
@@ -21,23 +24,51 @@ class PygameRenderer:
         buttons = {}
         letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         rows = [letters[0:10], letters[10:20], letters[20:]]
-        start_y = s.SCREEN_HEIGHT - 200
-        
+
+        width, height = self.screen.get_size()
+
+        button_width = width // 20        # scales with screen width
+        button_height = height // 15      # scales with screen height
+        margin = button_width // 5        
+
+        start_y = height - 200
+
         for row_idx, row_letters in enumerate(rows):
             row_count = len(row_letters)
-            row_width = row_count * s.BUTTON_WIDTH + (row_count - 1) * s.BUTTON_MARGIN
-            row_start_x = (s.SCREEN_WIDTH - row_width) // 2
-            y = start_y + row_idx * (s.BUTTON_HEIGHT + s.BUTTON_MARGIN)
-            
+            row_width = row_count * button_width + (row_count - 1) * margin
+            row_start_x = (width - row_width) // 2
+            y = start_y + row_idx * (button_height + margin)
+
             for col, letter in enumerate(row_letters):
-                x = row_start_x + col * (s.BUTTON_WIDTH + s.BUTTON_MARGIN)
-                buttons[letter] = pygame.Rect(x, y, s.BUTTON_WIDTH, s.BUTTON_HEIGHT)
-        
+                x = row_start_x + col * (button_width + margin)
+
+                # Explicit use of center=
+                rect = pygame.Rect(0, 0, button_width, button_height)
+                rect = rect.copy()  # ensure we have a rect object
+                rect.center = (x + button_width // 2, y + button_height // 2)
+
+                buttons[letter] = rect
+
         return buttons
 
+    def draw(self):
+        # Recalculate buttons every frame so they adapt to screen size
+        self.buttons = self._create_keyboard_buttons()
+
+        # ... rest of your draw code
+        for letter, rect in self.buttons.items():
+            pygame.draw.rect(self.screen, theme.COLORS["accent"], rect, 2)
+            text = self.font_small.render(letter, True, theme.COLORS["text_primary"])
+            text_rect = text.get_rect(center=rect.center)  # explicit center use
+            self.screen.blit(text, text_rect)
+
+        # draw other UI elements (word display, wrong guesses, etc.)
+        pygame.display.flip()
+
     def draw_hangman(self, lives, max_lives):
-        base_x = s.SCREEN_WIDTH // 2 - 40
-        base_y = 120
+        width, height = self.screen.get_size()
+        base_x = width // 2 - 40
+        base_y = height // 6
         
         if lives == 1:
             color = theme.COLORS["error"]
@@ -71,12 +102,14 @@ class PygameRenderer:
 
     def draw_word_display(self, display_word):
         text = self.font_large.render(display_word, True, theme.COLORS["accent"])
-        text_rect = text.get_rect(center=(s.SCREEN_WIDTH // 2, 300))
+        width, height = self.screen.get_size()
+        text_rect = text.get_rect(center=(width // 2, height // 2))
         self.screen.blit(text, text_rect)
 
     def draw_guessed_letters(self, guessed):
         text = self.font_small.render(f"Guessed: {' '.join(guessed) if guessed else 'None'}", True, theme.COLORS["text_dim"])
-        text_rect = text.get_rect(center=(s.SCREEN_WIDTH // 2, 350))
+        width, height = self.screen.get_size()
+        text_rect = text.get_rect(center=(width // 2, height // 2 + height // 10))
         self.screen.blit(text, text_rect)
 
     def draw_buttons(self, guessed):
@@ -232,7 +265,8 @@ class PygameRenderer:
     def draw_timer(self, timer):
         timer_text = f"Time: {timer:.1f}s"
         text = self.font_small.render(timer_text, True, theme.COLORS["text_primary"])
-        self.screen.blit(text, (s.SCREEN_WIDTH // 2 - text.get_width() // 2, 10))
+        width, height = self.screen.get_size()
+        self.screen.blit(text, (width // 2 - text.get_width() // 2, height // 50))
     
     def draw_high_score(self, high_score):
         if high_score > 0:
@@ -241,7 +275,8 @@ class PygameRenderer:
             self.screen.blit(text, (s.SCREEN_WIDTH - text.get_width() - 10, 10))
     
     def add_pause_button(self):
-        rect = pygame.Rect(s.SCREEN_WIDTH - 100, 10, 80, 30)
+        width, height = self.screen.get_size()
+        rect = pygame.Rect(width - 100, 10, 80, 30)
         self.ui_buttons.append(("pause", rect))
         color = theme.COLORS["button_hover"] if rect.collidepoint(pygame.mouse.get_pos()) else theme.COLORS["button"]
         pygame.draw.rect(self.screen, color, rect, border_radius=8)
@@ -250,7 +285,8 @@ class PygameRenderer:
         self.screen.blit(text, text_rect)
     
     def add_hint_button(self):
-        rect = pygame.Rect(s.SCREEN_WIDTH - 100, s.SCREEN_HEIGHT - 50, 80, 30)
+        width, height = self.screen.get_size()
+        rect = pygame.Rect(width - 100, height - 50, 80, 30)
         self.ui_buttons.append(("hint", rect))
         color = theme.COLORS["button_hover"] if rect.collidepoint(pygame.mouse.get_pos()) else theme.COLORS["button"]
         pygame.draw.rect(self.screen, color, rect, border_radius=8)
@@ -259,6 +295,12 @@ class PygameRenderer:
         self.screen.blit(text, text_rect)
     
     def add_pause_menu_buttons(self):
+        # Darken background overlay
+        overlay = pygame.Surface((s.SCREEN_WIDTH, s.SCREEN_HEIGHT))
+        overlay.set_alpha(180)  # transparency (0 = fully transparent, 255 = fully opaque)
+        overlay.fill((0, 0, 0))  # black overlay
+        self.screen.blit(overlay, (0, 0))
+
         # PAUSED text
         pause_text = self.font_large.render("PAUSED", True, theme.COLORS["text_primary"])
         rect = pause_text.get_rect(center=(s.SCREEN_WIDTH // 2, s.SCREEN_HEIGHT // 2 - 100))

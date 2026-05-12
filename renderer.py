@@ -1,17 +1,26 @@
-# renderer.py
+# renderer.py - Retro 8-Bit Style with Fixed Button Layout
 import pygame
 import theme
 import settings as s
 import random
 import math
-from utils import draw_glass_rect, create_nebula_background, ease_out_cubic, clamp, get_cached_text, clear_image_cache
+from utils import get_cached_text, clear_image_cache
 from sound_manager import SoundManager
+
+# 8-bit pixel font sizes
+PIXEL_FONT_SIZES = {
+    "tiny": 14,
+    "small": 18,
+    "medium": 24,
+    "large": 36,
+    "huge": 48
+}
 
 class HangmanAnimation:
     def __init__(self):
         self.current_part = 0
         self.animation_progress = 0
-        self.animation_speed = 2.5
+        self.animation_speed = 3.0
         self.is_animating = False
         self.completed_parts = 0
     
@@ -33,7 +42,7 @@ class HangmanAnimation:
         if part_number < self.completed_parts:
             return 1.0
         elif part_number == self.current_part and self.is_animating:
-            return ease_out_cubic(self.animation_progress)
+            return min(1.0, self.animation_progress)
         elif part_number <= self.completed_parts:
             return 1.0
         return 0
@@ -44,8 +53,59 @@ class HangmanAnimation:
         self.is_animating = False
         self.completed_parts = 0
 
+class MenuHangmanAnimation:
+    def __init__(self):
+        self.frame = 0
+        self.frame_speed = 0.15
+        self.animation_time = 0
+        self.arm_angle = 0
+        self.arm_direction = 1
+        self.body_offset = 0
+        self.body_direction = 1
+        self.head_bob = 0
+        self.head_direction = 1
+        
+    def update(self, dt):
+        self.animation_time += dt
+        
+        # Arm swinging animation (waves like a friendly hangman)
+        self.arm_angle += dt * 3 * self.arm_direction
+        if self.arm_angle >= 25:
+            self.arm_angle = 25
+            self.arm_direction = -1
+        elif self.arm_angle <= -25:
+            self.arm_angle = -25
+            self.arm_direction = 1
+        
+        # Body sway
+        self.body_offset += dt * 1.5 * self.body_direction
+        if self.body_offset >= 4:
+            self.body_offset = 4
+            self.body_direction = -1
+        elif self.body_offset <= -4:
+            self.body_offset = -4
+            self.body_direction = 1
+        
+        # Head bob
+        self.head_bob += dt * 2 * self.head_direction
+        if self.head_bob >= 3:
+            self.head_bob = 3
+            self.head_direction = -1
+        elif self.head_bob <= -3:
+            self.head_bob = -3
+            self.head_direction = 1
+    
+    def get_arm_angle(self):
+        return self.arm_angle
+    
+    def get_body_offset(self):
+        return self.body_offset
+    
+    def get_head_bob(self):
+        return self.head_bob
+
 class FloatingText:
-    def __init__(self, text, x, y, color, lifetime=40):
+    def __init__(self, text, x, y, color, lifetime=30):
         self.text = text
         self.x = x
         self.y = y
@@ -55,7 +115,7 @@ class FloatingText:
     
     def update(self):
         self.lifetime -= 1
-        self.y -= 1.5
+        self.y -= 1
         return self.lifetime > 0
     
     def get_alpha(self):
@@ -66,21 +126,21 @@ class Particle:
         self.x = x
         self.y = y
         self.color = color
-        self.vx = random.uniform(-2, 2)
-        self.vy = random.uniform(-4, -1)
-        self.lifetime = 25
-        self.size = random.randint(2, 4)
+        self.vx = random.uniform(-1.5, 1.5)
+        self.vy = random.uniform(-3, -1)
+        self.lifetime = 20
+        self.size = random.randint(2, 3)
     
     def update(self):
         self.x += self.vx
         self.y += self.vy
-        self.vy += 0.15
+        self.vy += 0.2
         self.lifetime -= 1
         return self.lifetime > 0
     
     def draw(self, screen):
         if self.size > 0:
-            pygame.draw.circle(screen, self.color, (int(self.x), int(self.y)), self.size)
+            pygame.draw.rect(screen, self.color, (int(self.x), int(self.y), self.size, self.size))
 
 class PygameRenderer:
     def __init__(self, screen):
@@ -96,6 +156,8 @@ class PygameRenderer:
         self.menu_button = None
         self.hint_button = None
         self.hovered_button = None
+        self.hover_timer = 0
+        self.last_hovered_button = None
         self.pressed_button = None
         self.press_timer = 0
         
@@ -126,6 +188,8 @@ class PygameRenderer:
         self.hangman_animation = HangmanAnimation()
         self.current_mistakes = 0
         
+        self.menu_hangman_anim = MenuHangmanAnimation()
+        
         self.pause_buttons = {}
         self.pause_hover = None
         
@@ -135,11 +199,11 @@ class PygameRenderer:
         self.update_layout()
         
     def _init_fonts(self):
-        self.font_huge = pygame.font.Font(None, s.FONT_SIZE_HUGE)
-        self.font_large = pygame.font.Font(None, s.FONT_SIZE_LARGE)
-        self.font_medium = pygame.font.Font(None, s.FONT_SIZE_MEDIUM)
-        self.font_small = pygame.font.Font(None, s.FONT_SIZE_SMALL)
-        self.font_tiny = pygame.font.Font(None, s.FONT_SIZE_TINY)
+        self.font_huge = pygame.font.Font(None, PIXEL_FONT_SIZES["huge"])
+        self.font_large = pygame.font.Font(None, PIXEL_FONT_SIZES["large"])
+        self.font_medium = pygame.font.Font(None, PIXEL_FONT_SIZES["medium"])
+        self.font_small = pygame.font.Font(None, PIXEL_FONT_SIZES["small"])
+        self.font_tiny = pygame.font.Font(None, PIXEL_FONT_SIZES["tiny"])
         
     def _init_surfaces(self):
         self.background = None
@@ -151,12 +215,28 @@ class PygameRenderer:
         self.menu_text = get_cached_text(self.font_tiny, "MENU", theme.COLORS["text_primary"])
         self.hint_text = get_cached_text(self.font_tiny, "HINT", theme.COLORS["text_primary"])
         self.hint_text_disabled = get_cached_text(self.font_tiny, "HINT", theme.COLORS["text_muted"])
-        self.resume_text = get_cached_text(self.font_small, "Resume", theme.COLORS["text_primary"])
-        self.exit_text = get_cached_text(self.font_small, "Exit to Menu", theme.COLORS["text_primary"])
-        self.paused_title = get_cached_text(self.font_large, "PAUSED", theme.COLORS["cyan_glow"])
+        self.resume_text = get_cached_text(self.font_small, "RESUME", theme.COLORS["text_primary"])
+        self.exit_text = get_cached_text(self.font_small, "EXIT", theme.COLORS["text_primary"])
+        self.paused_title = get_cached_text(self.font_large, "PAUSED", theme.COLORS["accent_primary"])
         
     def update_background(self):
-        self.background = create_nebula_background(s.SCREEN_WIDTH, s.SCREEN_HEIGHT)
+        self.background = self._create_8bit_background(s.SCREEN_WIDTH, s.SCREEN_HEIGHT)
+    
+    def _create_8bit_background(self, width, height):
+        bg = pygame.Surface((width, height))
+        bg.fill(theme.COLORS["bg_primary"])
+        
+        grid_size = 32
+        for x in range(0, width, grid_size):
+            for y in range(0, height, grid_size):
+                if (x // grid_size + y // grid_size) % 2 == 0:
+                    rect = pygame.Rect(x, y, grid_size, grid_size)
+                    pygame.draw.rect(bg, theme.COLORS["bg_secondary"], rect)
+        
+        for y in range(0, height, 4):
+            pygame.draw.line(bg, (10, 10, 15, 30), (0, y), (width, y))
+        
+        return bg.convert()
         
     def update_layout(self):
         self.update_background()
@@ -165,62 +245,45 @@ class PygameRenderer:
         self._init_text_cache()
         self.button_hover_scale = {letter: 0 for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"}
         
+    def _draw_pixel_rect(self, rect, color, border_color=None, border_width=2):
+        pygame.draw.rect(self.screen, color, rect)
+        if border_color:
+            pygame.draw.rect(self.screen, border_color, rect, border_width)
+            inner_rect = rect.inflate(-4, -4)
+            pygame.draw.rect(self.screen, (60, 60, 70), inner_rect, 1)
+        
     def _create_keyboard_buttons(self):
-        """Create keyboard buttons with proper QWERTY layout"""
+        button_width = 48
+        button_height = 48
+        margin = 6
         
-        if s.SCREEN_WIDTH >= 1200:
-            button_size = 55
-            margin = 10
-        elif s.SCREEN_WIDTH >= 900:
-            button_size = 50
-            margin = 8
-        elif s.SCREEN_WIDTH >= 600:
-            button_size = 45
-            margin = 7
-        else:
-            button_size = 40
-            margin = 6
+        rows = [
+            ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+            ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+            ["Z", "X", "C", "V", "B", "N", "M"]
+        ]
         
-        # Position keyboard at the bottom with 80px gap
-        keyboard_height = 3 * (button_size + margin)
-        keyboard_y = s.SCREEN_HEIGHT - keyboard_height - 60
+        max_row_width = len(rows[0]) * (button_width + margin) - margin
+        start_x = (s.SCREEN_WIDTH - max_row_width) // 2
+        base_y = s.SCREEN_HEIGHT - (len(rows) * (button_height + margin)) - 20
         
-        # Row 1: QWERTYUIOP - centered
-        row1 = ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"]
-        row1_width = len(row1) * (button_size + margin) - margin
-        row1_x = (s.SCREEN_WIDTH - row1_width) // 2
-        row1_y = keyboard_y
-        
-        for i, letter in enumerate(row1):
-            x = row1_x + i * (button_size + margin)
-            y = row1_y
-            self.buttons[letter] = pygame.Rect(x, y, button_size, button_size)
-        
-        # Row 2: ASDFGHJKL - centered with slight right shift
-        row2 = ["A", "S", "D", "F", "G", "H", "J", "K", "L"]
-        row2_width = len(row2) * (button_size + margin) - margin
-        row2_x = (s.SCREEN_WIDTH - row2_width) // 2 + int(button_size * 0.3)
-        row2_y = row1_y + button_size + margin
-        
-        for i, letter in enumerate(row2):
-            x = row2_x + i * (button_size + margin)
-            y = row2_y
-            self.buttons[letter] = pygame.Rect(x, y, button_size, button_size)
-        
-        # Row 3: ZXCVBNM - centered with more right shift
-        row3 = ["Z", "X", "C", "V", "B", "N", "M"]
-        row3_width = len(row3) * (button_size + margin) - margin
-        row3_x = (s.SCREEN_WIDTH - row3_width) // 2 + int(button_size * 0.6)
-        row3_y = row2_y + button_size + margin
-        
-        for i, letter in enumerate(row3):
-            x = row3_x + i * (button_size + margin)
-            y = row3_y
-            self.buttons[letter] = pygame.Rect(x, y, button_size, button_size)
+        for row_idx, row in enumerate(rows):
+            row_width = len(row) * (button_width + margin) - margin
+            row_start_x = start_x + (max_row_width - row_width) // 2
+            
+            if row_idx == 1:
+                row_start_x += 16
+            elif row_idx == 2:
+                row_start_x += 32
+            
+            for col_idx, letter in enumerate(row):
+                x = row_start_x + col_idx * (button_width + margin)
+                y = base_y + row_idx * (button_height + margin)
+                self.buttons[letter] = pygame.Rect(x, y, button_width, button_height)
                 
     def _create_pause_buttons(self):
-        button_w = int(s.SCREEN_WIDTH * 0.15)
-        button_h = int(s.SCREEN_HEIGHT * 0.06)
+        button_w = 160
+        button_h = 48
         start_y = s.SCREEN_HEIGHT // 2 - button_h
         
         self.pause_buttons = {
@@ -231,28 +294,142 @@ class PygameRenderer:
     
     def add_floating_text(self, text, x, y, is_positive=True):
         color = theme.COLORS["success"] if is_positive else theme.COLORS["error"]
-        self.floating_texts.append(FloatingText(text, x, y, color, 40))
+        self.floating_texts.append(FloatingText(text, x, y, color, 30))
     
     def add_particles(self, x, y, color):
-        for _ in range(8):
+        for _ in range(6):
             self.particles.append(Particle(x, y, color))
     
     def on_correct_guess(self, points, word_x, word_y):
         if points > 0:
             self.add_floating_text(f"+{points}", word_x, word_y - 40, True)
         self.add_particles(word_x, word_y, theme.COLORS["success"])
+        self.sound_manager.play_sfx("correct")
         
     def on_wrong_guess(self, letter_x, letter_y):
         self.add_floating_text("MISS", letter_x, letter_y - 30, False)
         self.add_particles(letter_x, letter_y, theme.COLORS["error"])
-                
+        self.sound_manager.play_sfx("incorrect")
+    
+    def _draw_pixel_hangman(self, mistakes, x_offset=0, y_offset=0, size_scale=1.0, animated=False, anim_data=None):
+        """Draw retro 8-bit hangman figure - can be offset for menu placement and animated"""
+        base_x = int(s.SCREEN_WIDTH * 0.18) + x_offset
+        base_y = int(s.SCREEN_HEIGHT * 0.30) + y_offset
+        
+        # Apply animation offsets if needed
+        arm_angle = 0
+        body_offset = 0
+        head_bob = 0
+        if animated and anim_data:
+            arm_angle = anim_data.get_arm_angle()
+            body_offset = anim_data.get_body_offset()
+            head_bob = anim_data.get_head_bob()
+        
+        # Adjust sizes for menu (smaller)
+        if size_scale != 1.0:
+            gallows_color = theme.COLORS["text_secondary"]
+            
+            platform_rect = pygame.Rect(base_x - 15, base_y + 120, int(80 * size_scale), int(5 * size_scale))
+            pygame.draw.rect(self.screen, gallows_color, platform_rect)
+            
+            pole_rect = pygame.Rect(base_x + 30, base_y - 15, int(5 * size_scale), int(135 * size_scale))
+            pygame.draw.rect(self.screen, gallows_color, pole_rect)
+            
+            beam_rect = pygame.Rect(base_x + 30, base_y - 15, int(55 * size_scale), int(5 * size_scale))
+            pygame.draw.rect(self.screen, gallows_color, beam_rect)
+            
+            rope_x = base_x + int(82 * size_scale)
+            rope_rect = pygame.Rect(rope_x - 2, base_y - 10, int(4 * size_scale), int(22 * size_scale))
+            pygame.draw.rect(self.screen, theme.COLORS["text_muted"], rope_rect)
+            
+            head_x = rope_x
+            head_y = base_y + 15 + head_bob * 0.5
+            
+            if mistakes >= 1:
+                head_rect = pygame.Rect(head_x - int(10 * size_scale), head_y - int(10 * size_scale), int(20 * size_scale), int(20 * size_scale))
+                pygame.draw.rect(self.screen, theme.COLORS["accent_primary"], head_rect)
+                pygame.draw.rect(self.screen, theme.COLORS["border_dark"], head_rect, int(2 * size_scale))
+                pygame.draw.rect(self.screen, theme.COLORS["text_primary"], (head_x - int(6 * size_scale), head_y - int(4 * size_scale), int(3 * size_scale), int(3 * size_scale)))
+                pygame.draw.rect(self.screen, theme.COLORS["text_primary"], (head_x + int(3 * size_scale), head_y - int(4 * size_scale), int(3 * size_scale), int(3 * size_scale)))
+            
+            if mistakes >= 2:
+                body_rect = pygame.Rect(head_x - int(4 * size_scale) + body_offset * 0.3, head_y + int(12 * size_scale), int(8 * size_scale), int(30 * size_scale))
+                pygame.draw.rect(self.screen, theme.COLORS["accent_secondary"], body_rect)
+            
+            if mistakes >= 3:
+                # Left arm with swing animation
+                arm_end_x = head_x - int(16 * size_scale) + (arm_angle * 0.2)
+                arm_end_y = head_y + int(17 * size_scale) + (abs(arm_angle) * 0.15)
+                arm_rect = pygame.Rect(min(head_x - int(16 * size_scale), arm_end_x), 
+                                       min(head_y + int(17 * size_scale), arm_end_y),
+                                       int(14 * size_scale), int(5 * size_scale))
+                pygame.draw.rect(self.screen, theme.COLORS["accent_secondary"], arm_rect)
+            
+            if mistakes >= 4:
+                # Right arm with swing animation (opposite direction)
+                arm_end_x = head_x + int(2 * size_scale) - (arm_angle * 0.2)
+                arm_end_y = head_y + int(17 * size_scale) + (abs(arm_angle) * 0.15)
+                arm_rect = pygame.Rect(arm_end_x, head_y + int(17 * size_scale),
+                                       int(14 * size_scale), int(5 * size_scale))
+                pygame.draw.rect(self.screen, theme.COLORS["accent_secondary"], arm_rect)
+            
+            if mistakes >= 5:
+                leg_rect = pygame.Rect(head_x - int(10 * size_scale), head_y + int(38 * size_scale), int(10 * size_scale), int(5 * size_scale))
+                pygame.draw.rect(self.screen, theme.COLORS["accent_secondary"], leg_rect)
+            
+            if mistakes >= 6:
+                leg_rect = pygame.Rect(head_x, head_y + int(38 * size_scale), int(10 * size_scale), int(5 * size_scale))
+                pygame.draw.rect(self.screen, theme.COLORS["accent_secondary"], leg_rect)
+        else:
+            # Full size for gameplay
+            gallows_color = theme.COLORS["text_secondary"]
+            
+            platform_rect = pygame.Rect(base_x - 20, base_y + 160, 100, 6)
+            pygame.draw.rect(self.screen, gallows_color, platform_rect)
+            
+            pole_rect = pygame.Rect(base_x + 40, base_y - 20, 6, 180)
+            pygame.draw.rect(self.screen, gallows_color, pole_rect)
+            
+            beam_rect = pygame.Rect(base_x + 40, base_y - 20, 70, 6)
+            pygame.draw.rect(self.screen, gallows_color, beam_rect)
+            
+            rope_x = base_x + 105
+            rope_rect = pygame.Rect(rope_x - 3, base_y - 14, 6, 30)
+            pygame.draw.rect(self.screen, theme.COLORS["text_muted"], rope_rect)
+            
+            head_x = rope_x
+            head_y = base_y + 20
+            
+            if mistakes >= 1:
+                head_rect = pygame.Rect(head_x - 12, head_y - 12, 24, 24)
+                pygame.draw.rect(self.screen, theme.COLORS["accent_primary"], head_rect)
+                pygame.draw.rect(self.screen, theme.COLORS["border_dark"], head_rect, 2)
+                pygame.draw.rect(self.screen, theme.COLORS["text_primary"], (head_x - 7, head_y - 5, 4, 4))
+                pygame.draw.rect(self.screen, theme.COLORS["text_primary"], (head_x + 3, head_y - 5, 4, 4))
+            
+            if mistakes >= 2:
+                body_rect = pygame.Rect(head_x - 5, head_y + 14, 10, 40)
+                pygame.draw.rect(self.screen, theme.COLORS["accent_secondary"], body_rect)
+            
+            if mistakes >= 3:
+                arm_rect = pygame.Rect(head_x - 20, head_y + 20, 18, 6)
+                pygame.draw.rect(self.screen, theme.COLORS["accent_secondary"], arm_rect)
+            
+            if mistakes >= 4:
+                arm_rect = pygame.Rect(head_x + 2, head_y + 20, 18, 6)
+                pygame.draw.rect(self.screen, theme.COLORS["accent_secondary"], arm_rect)
+            
+            if mistakes >= 5:
+                leg_rect = pygame.Rect(head_x - 12, head_y + 50, 12, 6)
+                pygame.draw.rect(self.screen, theme.COLORS["accent_secondary"], leg_rect)
+            
+            if mistakes >= 6:
+                leg_rect = pygame.Rect(head_x, head_y + 50, 12, 6)
+                pygame.draw.rect(self.screen, theme.COLORS["accent_secondary"], leg_rect)
+        
+        return head_x, head_y
+    
     def draw_hangman(self, lives, max_lives):
-        base_x = int(s.SCREEN_WIDTH * 0.18)
-        base_y = int(s.SCREEN_HEIGHT * 0.30)
-        
-        self.float_phase += 0.015
-        self.hangman_float = math.sin(self.float_phase) * 2
-        
         mistakes = max_lives - lives
         
         if mistakes > self.current_mistakes:
@@ -262,83 +439,22 @@ class PygameRenderer:
         dt = self.clock.get_time() / 1000.0
         self.hangman_animation.update(dt)
         
-        platform_w = int(s.SCREEN_WIDTH * 0.16)
-        platform = pygame.Rect(base_x - 30, base_y + 150 + self.hangman_float, platform_w, 8)
-        pygame.draw.rect(self.screen, theme.COLORS["text_secondary"], platform, border_radius=4)
-        
-        pole_h = int(s.SCREEN_HEIGHT * 0.22)
-        pole = pygame.Rect(base_x + 30, base_y - 30 + self.hangman_float, 8, pole_h)
-        pygame.draw.rect(self.screen, theme.COLORS["text_secondary"], pole, border_radius=4)
-        
-        beam_w = int(s.SCREEN_WIDTH * 0.1)
-        beam = pygame.Rect(base_x + 30, base_y - 30 + self.hangman_float, beam_w, 8)
-        pygame.draw.rect(self.screen, theme.COLORS["text_secondary"], beam, border_radius=4)
-        
-        rope_x = base_x + 30 + beam_w - 8
-        rope_y_end = base_y + 25 + self.hangman_float
-        pygame.draw.line(self.screen, theme.COLORS["text_muted"], 
-                        (rope_x, base_y - 22 + self.hangman_float), (rope_x, rope_y_end), 3)
-        
-        head_y = rope_y_end + 15
-        
-        if mistakes >= 1:
-            progress = self.hangman_animation.get_draw_progress(1)
-            if progress > 0:
-                head_radius = int(20 * progress)
-                inner_radius = int(16 * progress)
-                if head_radius > 0:
-                    pygame.draw.circle(self.screen, theme.COLORS["cyan_glow"], (rope_x, head_y), head_radius)
-                    if inner_radius > 0:
-                        pygame.draw.circle(self.screen, theme.COLORS["nebula_deep"], (rope_x, head_y), inner_radius)
-                        pygame.draw.circle(self.screen, theme.COLORS["cyan_glow"], (rope_x, head_y), inner_radius, 2)
-                
-                if progress > 0.5:
-                    eye_y = head_y - 5
-                    pygame.draw.circle(self.screen, theme.COLORS["nebula_deep"], (rope_x - 7, eye_y), 4)
-                    pygame.draw.circle(self.screen, theme.COLORS["nebula_deep"], (rope_x + 7, eye_y), 4)
-        
-        if mistakes >= 2:
-            progress = self.hangman_animation.get_draw_progress(2)
-            if progress > 0:
-                body_end_y = head_y + 20 + int(55 * progress)
-                pygame.draw.line(self.screen, theme.COLORS["cyan_glow"], 
-                               (rope_x, head_y + 20), (rope_x, body_end_y), 7)
-        
-        if mistakes >= 3:
-            progress = self.hangman_animation.get_draw_progress(3)
-            if progress > 0:
-                arm_end_x = rope_x - int(30 * progress)
-                arm_end_y = head_y + 30 + int(15 * progress)
-                pygame.draw.line(self.screen, theme.COLORS["cyan_glow"], 
-                               (rope_x, head_y + 30), (arm_end_x, arm_end_y), 6)
-        
-        if mistakes >= 4:
-            progress = self.hangman_animation.get_draw_progress(4)
-            if progress > 0:
-                arm_end_x = rope_x + int(30 * progress)
-                arm_end_y = head_y + 30 + int(15 * progress)
-                pygame.draw.line(self.screen, theme.COLORS["cyan_glow"], 
-                               (rope_x, head_y + 30), (arm_end_x, arm_end_y), 6)
-        
-        if mistakes >= 5:
-            progress = self.hangman_animation.get_draw_progress(5)
-            if progress > 0:
-                leg_end_x = rope_x - int(25 * progress)
-                leg_end_y = head_y + 75 + int(35 * progress)
-                pygame.draw.line(self.screen, theme.COLORS["cyan_glow"], 
-                               (rope_x, head_y + 75), (leg_end_x, leg_end_y), 6)
-        
-        if mistakes >= 6:
-            progress = self.hangman_animation.get_draw_progress(6)
-            if progress > 0:
-                leg_end_x = rope_x + int(25 * progress)
-                leg_end_y = head_y + 75 + int(35 * progress)
-                pygame.draw.line(self.screen, theme.COLORS["cyan_glow"], 
-                               (rope_x, head_y + 75), (leg_end_x, leg_end_y), 6)
+        self._draw_pixel_hangman(mistakes)
+    
+    def update_menu_animation(self):
+        """Update the menu hangman animation"""
+        dt = self.clock.get_time() / 1000.0
+        self.menu_hangman_anim.update(dt)
+    
+    def draw_menu_hangman(self):
+        """Draw an animated hangman character on the main menu"""
+        self.update_menu_animation()
+        self._draw_pixel_hangman(3, x_offset=-220, y_offset=-50, size_scale=0.65, 
+                                 animated=True, anim_data=self.menu_hangman_anim)
                            
     def draw_word_display(self, display_word):
         letters = display_word.split()
-        letter_spacing = int(s.SCREEN_WIDTH * 0.05)
+        letter_spacing = int(s.SCREEN_WIDTH * 0.045)
         total_width = len(letters) * letter_spacing
         start_x = (s.SCREEN_WIDTH - total_width) // 2 + letter_spacing // 2
         
@@ -346,31 +462,34 @@ class PygameRenderer:
             x = start_x + i * letter_spacing + self.shake_offset_x
             y = int(s.SCREEN_HEIGHT * 0.48) + self.shake_offset_y
             
-            color = theme.COLORS["cyan_glow"] if letter != "_" else theme.COLORS["text_secondary"]
-            text = get_cached_text(self.font_large, letter, color)
-            text_rect = text.get_rect(center=(x, y))
-            self.screen.blit(text, text_rect)
-            
-            bar_w = int(letter_spacing * 0.8)
-            bar = pygame.Rect(x - bar_w//2, y + 30, bar_w, 4 if letter != "_" else 3)
             if letter != "_":
-                pygame.draw.rect(self.screen, theme.COLORS["cyan_glow"], bar, border_radius=2)
+                text = get_cached_text(self.font_large, letter, theme.COLORS["accent_primary"])
+                text_rect = text.get_rect(center=(x, y))
+                self.screen.blit(text, text_rect)
+                
+                bar_rect = pygame.Rect(x - 15, y + 20, 30, 3)
+                pygame.draw.rect(self.screen, theme.COLORS["accent_primary"], bar_rect)
             else:
-                pygame.draw.rect(self.screen, theme.COLORS["text_muted"], bar, border_radius=2)
+                text = get_cached_text(self.font_large, "_", theme.COLORS["text_muted"])
+                text_rect = text.get_rect(center=(x, y))
+                self.screen.blit(text, text_rect)
+                
+                bar_rect = pygame.Rect(x - 15, y + 20, 30, 2)
+                pygame.draw.rect(self.screen, theme.COLORS["text_muted"], bar_rect)
                                
     def draw_guessed_letters(self, guessed):
         if not guessed:
             return
         
-        text_str = "Guessed: " + " ".join(guessed)
+        text_str = " ".join(guessed)
         text = get_cached_text(self.font_small, text_str, theme.COLORS["text_secondary"])
         text_rect = text.get_rect(center=(s.SCREEN_WIDTH // 2, int(s.SCREEN_HEIGHT * 0.58)))
         
-        padding = 20
-        bg = pygame.Rect(text_rect.x - padding, text_rect.y - 8, 
-                        text_rect.width + padding * 2, text_rect.height + 16)
-        draw_glass_rect(self.screen, bg, theme.COLORS["glass_medium"], 20, 
-                       border_width=1, border_color=theme.COLORS["glass_border"])
+        padding = 15
+        bg_rect = pygame.Rect(text_rect.x - padding, text_rect.y - 6, 
+                              text_rect.width + padding * 2, text_rect.height + 12)
+        pygame.draw.rect(self.screen, theme.COLORS["surface_dark"], bg_rect)
+        pygame.draw.rect(self.screen, theme.COLORS["border_light"], bg_rect, 2)
         self.screen.blit(text, text_rect)
         
     def draw_buttons(self, guessed):
@@ -379,41 +498,31 @@ class PygameRenderer:
         
         for letter, rect in self.buttons.items():
             if letter in guessed:
-                color = theme.COLORS["glass_dark"]
-                border = theme.COLORS["text_muted"]
-                text_color = theme.COLORS["text_muted"]
-                draw_glass_rect(self.screen, rect, color, 12, border_width=1, border_color=border)
+                color = theme.COLORS["key_disabled"]
+                text_color = theme.COLORS["key_text_disabled"]
+                self._draw_pixel_rect(rect, color, theme.COLORS["border_dark"], 1)
                 text = get_cached_text(self.font_small, letter, text_color)
                 text_rect = text.get_rect(center=rect.center)
                 self.screen.blit(text, text_rect)
-                pygame.draw.line(self.screen, theme.COLORS["error"], 
-                               (rect.x + 10, rect.centery), 
-                               (rect.right - 10, rect.centery), 2)
-                if rect.collidepoint(mouse_pos):
-                    self.hovered_button = letter
             else:
                 is_hover = rect.collidepoint(mouse_pos)
                 if is_hover:
-                    scale = 1.05
-                    scaled_width = int(rect.width * scale)
-                    scaled_height = int(rect.height * scale)
-                    scaled_rect = pygame.Rect(rect.centerx - scaled_width//2, rect.centery - scaled_height//2, scaled_width, scaled_height)
-                    color = theme.COLORS["glass_light"]
-                    border = theme.COLORS["cyan_glow"]
-                    text_color = theme.COLORS["cyan_glow"]
+                    color = theme.COLORS["key_hover"]
                     self.hovered_button = letter
-                    draw_glass_rect(self.screen, scaled_rect, color, 12, border_width=2, border_color=border)
-                    text = get_cached_text(self.font_small, letter, text_color)
-                    text_rect = text.get_rect(center=scaled_rect.center)
-                    self.screen.blit(text, text_rect)
+                    # Play hover sound only when hover starts (not continuously)
+                    if self.last_hovered_button != letter:
+                        self.sound_manager.play_sfx("hover")
+                        self.last_hovered_button = letter
                 else:
-                    color = theme.COLORS["glass_medium"]
-                    border = theme.COLORS["glass_border"]
-                    text_color = theme.COLORS["text_primary"]
-                    draw_glass_rect(self.screen, rect, color, 12, border_width=2, border_color=border)
-                    text = get_cached_text(self.font_small, letter, text_color)
-                    text_rect = text.get_rect(center=rect.center)
-                    self.screen.blit(text, text_rect)
+                    color = theme.COLORS["key_normal"]
+                    if self.last_hovered_button == letter:
+                        self.last_hovered_button = None
+                    
+                self._draw_pixel_rect(rect, color, theme.COLORS["border_light"], 2)
+                text_color = theme.COLORS["accent_primary"] if is_hover else theme.COLORS["key_text"]
+                text = get_cached_text(self.font_small, letter, text_color)
+                text_rect = text.get_rect(center=rect.center)
+                self.screen.blit(text, text_rect)
             
     def draw_lives(self, lives, max_lives):
         x = int(s.SCREEN_WIDTH * 0.03)
@@ -421,119 +530,118 @@ class PygameRenderer:
         
         self.screen.blit(self.lives_label, (x, y - 20))
         
-        spacing = int(s.SCREEN_WIDTH * 0.035)
+        spacing = 25
         for i in range(max_lives):
-            cx = x + i * spacing + 14
-            cy = y + 20
-            color = theme.COLORS["error"] if i < lives else theme.COLORS["text_muted"]
+            cx = x + i * spacing + 10
+            cy = y + 10
+            color = theme.COLORS["accent_primary"] if i < lives else theme.COLORS["text_muted"]
             
-            size = int(s.SCREEN_WIDTH * 0.011)
-            points = [(cx, cy - size), (cx + size, cy - size//2), (cx + size//2, cy + size//2),
-                     (cx, cy + size), (cx - size//2, cy + size//2), (cx - size, cy - size//2)]
-            pygame.draw.polygon(self.screen, color, points)
+            heart_rect = pygame.Rect(cx - 6, cy - 5, 12, 10)
+            pygame.draw.rect(self.screen, color, heart_rect)
+            pygame.draw.rect(self.screen, theme.COLORS["border_dark"], heart_rect, 1)
             
     def draw_score_panel(self, score, streak, hint_cost, can_afford):
-        panel_w = int(s.SCREEN_WIDTH * 0.15)
-        panel_h = int(s.SCREEN_HEIGHT * 0.14)
-        panel_x = s.SCREEN_WIDTH - panel_w - int(s.SCREEN_WIDTH * 0.02)
-        panel_y = int(s.SCREEN_HEIGHT * 0.03)
+        panel_w = 180
+        panel_h = 110
+        panel_x = s.SCREEN_WIDTH - panel_w - 20
+        panel_y = 20
         
-        panel = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
-        draw_glass_rect(self.screen, panel, theme.COLORS["glass_medium"], 15,
-                       border_width=2, border_color=theme.COLORS["glass_border"])
+        panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
+        pygame.draw.rect(self.screen, theme.COLORS["surface_dark"], panel_rect)
+        pygame.draw.rect(self.screen, theme.COLORS["border_light"], panel_rect, 2)
         
-        score_label_rect = self.score_label.get_rect(center=(panel_x + panel_w//2, panel_y + 18))
+        # SCORE label
+        score_label_rect = self.score_label.get_rect(center=(panel_x + panel_w // 2, panel_y + 18))
         self.screen.blit(self.score_label, score_label_rect)
         
+        # Score value
         if score != self.prev_score:
             self.score_surface = get_cached_text(self.font_medium, str(score), theme.COLORS["warning"])
             self.prev_score = score
         if self.score_surface:
-            score_rect = self.score_surface.get_rect(center=(panel_x + panel_w//2, panel_y + 48))
+            score_rect = self.score_surface.get_rect(center=(panel_x + panel_w // 2, panel_y + 48))
             self.screen.blit(self.score_surface, score_rect)
         
+        # Streak
         if streak > 1:
             if streak != self.prev_streak:
-                self.streak_surface = get_cached_text(self.font_small, f"Streak: x{streak}", theme.COLORS["violet_glow"])
+                self.streak_surface = get_cached_text(self.font_small, f"x{streak} STREAK", theme.COLORS["accent_primary"])
                 self.prev_streak = streak
             if self.streak_surface:
-                streak_rect = self.streak_surface.get_rect(center=(panel_x + panel_w//2, panel_y + 78))
+                streak_rect = self.streak_surface.get_rect(center=(panel_x + panel_w // 2, panel_y + 75))
                 self.screen.blit(self.streak_surface, streak_rect)
-            
+        
+        # Hint cost
         hint_color = theme.COLORS["text_primary"] if can_afford else theme.COLORS["text_muted"]
-        hint_label = get_cached_text(self.font_tiny, f"Hint: {hint_cost} pts", hint_color)
-        hint_label_rect = hint_label.get_rect(center=(panel_x + panel_w//2, panel_y + 98))
-        self.screen.blit(hint_label, hint_label_rect)
-            
-    def draw_message_popup(self):
-        if self.message and self.message_timer > 0:
-            alpha = min(255, self.message_timer * 8)
-            if self.message_surface is None or self.message_surface.get_alpha() != alpha:
-                text = get_cached_text(self.font_medium, self.message, self.message_color)
-                self.message_surface = text.copy()
-                self.message_surface.set_alpha(alpha)
-            
-            y_off = (1 - self.message_timer / 45) * 30
-            text_rect = self.message_surface.get_rect(center=(s.SCREEN_WIDTH // 2 + self.shake_offset_x, 
-                                              int(s.SCREEN_HEIGHT * 0.72) + self.shake_offset_y - y_off))
-            bg = pygame.Rect(text_rect.x - 20, text_rect.y - 10, 
-                            text_rect.width + 40, text_rect.height + 20)
-            draw_glass_rect(self.screen, bg, theme.COLORS["glass_light"], 25,
-                           border_width=1, border_color=(*self.message_color, alpha // 2))
-            self.screen.blit(self.message_surface, text_rect)
-            self.message_timer -= 1
-            
+        hint_label = get_cached_text(self.font_tiny, f"HINT:{hint_cost}", hint_color)
+        hint_rect = hint_label.get_rect(center=(panel_x + panel_w // 2, panel_y + 95))
+        self.screen.blit(hint_label, hint_rect)
+    
     def draw_menu_button(self):
-        button_w = int(s.SCREEN_WIDTH * 0.08)
-        button_h = int(s.SCREEN_HEIGHT * 0.05)
+        """Draw menu button - positioned below score panel to avoid overlap"""
+        button_w = 70
+        button_h = 35
+        # Position below score panel (score panel height is 110, starts at y=20)
         self.menu_button = pygame.Rect(
-            s.SCREEN_WIDTH - button_w - int(s.SCREEN_WIDTH * 0.02),
-            int(s.SCREEN_HEIGHT * 0.19),
+            s.SCREEN_WIDTH - button_w - 15,
+            145,  # Moved down from 80 to 145 (below score panel)
             button_w, button_h
         )
         is_hover = self.menu_button.collidepoint(pygame.mouse.get_pos())
-        color = theme.COLORS["glass_light"] if is_hover else theme.COLORS["glass_medium"]
-        border = theme.COLORS["cyan_glow"] if is_hover else theme.COLORS["glass_border"]
+        color = theme.COLORS["key_hover"] if is_hover else theme.COLORS["key_normal"]
         
-        draw_glass_rect(self.screen, self.menu_button, color, 10, border_width=2, border_color=border)
+        # Play hover sound only when hover starts
+        if is_hover and self.last_hovered_button != "menu":
+            self.sound_manager.play_sfx("hover")
+            self.last_hovered_button = "menu"
+        elif not is_hover and self.last_hovered_button == "menu":
+            self.last_hovered_button = None
+        
+        self._draw_pixel_rect(self.menu_button, color, theme.COLORS["border_light"], 2)
         text_rect = self.menu_text.get_rect(center=self.menu_button.center)
         self.screen.blit(self.menu_text, text_rect)
         
     def draw_hint_button(self, game_state):
+        """Draw hint button - positioned below menu button"""
         if game_state["game_over"]:
             return
             
-        button_w = int(s.SCREEN_WIDTH * 0.08)
-        button_h = int(s.SCREEN_HEIGHT * 0.05)
+        button_w = 70
+        button_h = 35
+        # Position below menu button
         self.hint_button = pygame.Rect(
-            s.SCREEN_WIDTH - button_w - int(s.SCREEN_WIDTH * 0.02),
-            int(s.SCREEN_HEIGHT * 0.26),
+            s.SCREEN_WIDTH - button_w - 15,
+            190,  # Moved down from 125 to 190
             button_w, button_h
         )
         is_hover = self.hint_button.collidepoint(pygame.mouse.get_pos())
         can_afford = game_state["can_afford_hint"]
         
+        # Play hover sound only when hover starts
+        if is_hover and can_afford and self.last_hovered_button != "hint":
+            self.sound_manager.play_sfx("hover")
+            self.last_hovered_button = "hint"
+        elif (not is_hover or not can_afford) and self.last_hovered_button == "hint":
+            self.last_hovered_button = None
+        
         if not can_afford:
-            color = (60, 60, 80, 180)
-            border = theme.COLORS["text_muted"]
+            color = theme.COLORS["key_disabled"]
             text = self.hint_text_disabled
         elif is_hover:
-            color = theme.COLORS["glass_light"]
-            border = theme.COLORS["violet_glow"]
+            color = theme.COLORS["accent_hover"]
             text = self.hint_text
         else:
-            color = theme.COLORS["glass_medium"]
-            border = theme.COLORS["glass_border"]
+            color = theme.COLORS["accent_primary"]
             text = self.hint_text
             
-        draw_glass_rect(self.screen, self.hint_button, color, 10, border_width=2, border_color=border)
+        self._draw_pixel_rect(self.hint_button, color, theme.COLORS["border_light"], 2)
         text_rect = text.get_rect(center=self.hint_button.center)
         self.screen.blit(text, text_rect)
         
     def draw_pause_menu(self):
         overlay = pygame.Surface((s.SCREEN_WIDTH, s.SCREEN_HEIGHT))
-        overlay.set_alpha(180)
-        overlay.fill(theme.COLORS["nebula_deep"])
+        overlay.set_alpha(200)
+        overlay.fill(theme.COLORS["bg_primary"])
         self.screen.blit(overlay, (0, 0))
         
         self._create_pause_buttons()
@@ -556,13 +664,16 @@ class PygameRenderer:
             is_hover = rect.collidepoint(mouse_pos)
             if is_hover:
                 self.pause_hover = name
-                color = theme.COLORS["glass_light"]
-                border = theme.COLORS["cyan_glow"]
+                color = theme.COLORS["accent_hover"]
+                if self.last_hovered_button != name:
+                    self.sound_manager.play_sfx("hover")
+                    self.last_hovered_button = name
             else:
-                color = theme.COLORS["glass_medium"]
-                border = theme.COLORS["glass_border"]
+                color = theme.COLORS["key_normal"]
+                if self.last_hovered_button == name:
+                    self.last_hovered_button = None
             
-            draw_glass_rect(self.screen, rect, color, 12, border_width=2, border_color=border)
+            self._draw_pixel_rect(rect, color, theme.COLORS["border_light"], 2)
             
             text_rect = button_texts[name].get_rect(center=rect.center)
             self.screen.blit(button_texts[name], text_rect)
@@ -570,17 +681,17 @@ class PygameRenderer:
     def draw_end_screen(self, won, secret_word, final_score, is_high_score=False):
         overlay = pygame.Surface((s.SCREEN_WIDTH, s.SCREEN_HEIGHT))
         overlay.set_alpha(220)
-        overlay.fill(theme.COLORS["nebula_deep"])
+        overlay.fill(theme.COLORS["bg_primary"])
         self.screen.blit(overlay, (0, 0))
         
-        card_w = int(s.SCREEN_WIDTH * 0.45)
-        card_h = int(s.SCREEN_HEIGHT * 0.45)
+        card_w = 500
+        card_h = 380
         card_x = (s.SCREEN_WIDTH - card_w) // 2
         card_y = (s.SCREEN_HEIGHT - card_h) // 2
         
-        card = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
-        draw_glass_rect(card, pygame.Rect(0, 0, card_w, card_h), theme.COLORS["glass_medium"], 25,
-                       border_width=3, border_color=theme.COLORS["glass_border"])
+        card_rect = pygame.Rect(card_x, card_y, card_w, card_h)
+        pygame.draw.rect(self.screen, theme.COLORS["surface_dark"], card_rect)
+        pygame.draw.rect(self.screen, theme.COLORS["border_light"], card_rect, 3)
         
         if won:
             title = "VICTORY!"
@@ -590,55 +701,48 @@ class PygameRenderer:
             title_color = theme.COLORS["error"]
             
         title_text = get_cached_text(self.font_huge, title, title_color)
-        title_rect = title_text.get_rect(center=(card_w // 2, 70))
-        card.blit(title_text, title_rect)
+        title_rect = title_text.get_rect(center=(card_x + card_w // 2, card_y + 60))
+        self.screen.blit(title_text, title_rect)
         
-        score_text = get_cached_text(self.font_medium, f"Final Score: {final_score}", theme.COLORS["text_primary"])
-        score_rect = score_text.get_rect(center=(card_w // 2, 140))
-        card.blit(score_text, score_rect)
+        score_text = get_cached_text(self.font_medium, f"SCORE: {final_score}", theme.COLORS["text_primary"])
+        score_rect = score_text.get_rect(center=(card_x + card_w // 2, card_y + 120))
+        self.screen.blit(score_text, score_rect)
         
         if is_high_score:
             high_text = get_cached_text(self.font_small, "NEW HIGH SCORE!", theme.COLORS["warning"])
-            high_rect = high_text.get_rect(center=(card_w // 2, 185))
-            card.blit(high_text, high_rect)
+            high_rect = high_text.get_rect(center=(card_x + card_w // 2, card_y + 160))
+            self.screen.blit(high_text, high_rect)
         
         if not won:
-            word_text = get_cached_text(self.font_medium, f"Word: {secret_word}", theme.COLORS["text_secondary"])
-            word_rect = word_text.get_rect(center=(card_w // 2, 230 if not is_high_score else 250))
-            card.blit(word_text, word_rect)
+            word_text = get_cached_text(self.font_medium, f"WORD: {secret_word}", theme.COLORS["accent_secondary"])
+            word_rect = word_text.get_rect(center=(card_x + card_w // 2, card_y + 200))
+            self.screen.blit(word_text, word_rect)
         
-        button_width = 150
+        button_width = 160
         button_height = 45
         button_spacing = 30
-        button_y = card_h - 100
+        button_y = card_y + card_h - 80
         
-        # Store button rectangles in CARD coordinates
-        play_again_rect_card = pygame.Rect(card_w // 2 - button_width - button_spacing // 2, button_y, button_width, button_height)
-        main_menu_rect_card = pygame.Rect(card_w // 2 + button_spacing // 2, button_y, button_width, button_height)
+        play_again_rect = pygame.Rect(card_x + card_w // 2 - button_width - button_spacing // 2, button_y, button_width, button_height)
+        main_menu_rect = pygame.Rect(card_x + card_w // 2 + button_spacing // 2, button_y, button_width, button_height)
         
-        draw_glass_rect(card, play_again_rect_card, theme.COLORS["glass_light"], 10, border_width=2, border_color=theme.COLORS["success"])
-        draw_glass_rect(card, main_menu_rect_card, theme.COLORS["glass_light"], 10, border_width=2, border_color=theme.COLORS["cyan_glow"])
+        self._draw_pixel_rect(play_again_rect, theme.COLORS["accent_primary"], theme.COLORS["border_light"], 2)
+        self._draw_pixel_rect(main_menu_rect, theme.COLORS["key_normal"], theme.COLORS["border_light"], 2)
         
         play_text = get_cached_text(self.font_small, "PLAY AGAIN", theme.COLORS["text_primary"])
         menu_text = get_cached_text(self.font_small, "MAIN MENU", theme.COLORS["text_primary"])
         
-        play_text_rect = play_text.get_rect(center=play_again_rect_card.center)
-        menu_text_rect = menu_text.get_rect(center=main_menu_rect_card.center)
+        play_text_rect = play_text.get_rect(center=play_again_rect.center)
+        menu_text_rect = menu_text.get_rect(center=main_menu_rect.center)
         
-        card.blit(play_text, play_text_rect)
-        card.blit(menu_text, menu_text_rect)
+        self.screen.blit(play_text, play_text_rect)
+        self.screen.blit(menu_text, menu_text_rect)
         
-        prompt_text = get_cached_text(self.font_small, "SPACE to continue  •  ESC for menu", theme.COLORS["text_muted"])
-        prompt_rect = prompt_text.get_rect(center=(card_w // 2, card_h - 35))
-        card.blit(prompt_text, prompt_rect)
+        prompt_text = get_cached_text(self.font_tiny, "SPACE  |  ESC", theme.COLORS["text_muted"])
+        prompt_rect = prompt_text.get_rect(center=(card_x + card_w // 2, card_y + card_h - 25))
+        self.screen.blit(prompt_text, prompt_rect)
         
-        self.screen.blit(card, (card_x, card_y))
-        
-        # Convert to SCREEN coordinates for click detection
-        play_again_rect_screen = pygame.Rect(card_x + play_again_rect_card.x, card_y + play_again_rect_card.y, play_again_rect_card.width, play_again_rect_card.height)
-        main_menu_rect_screen = pygame.Rect(card_x + main_menu_rect_card.x, card_y + main_menu_rect_card.y, main_menu_rect_card.width, main_menu_rect_card.height)
-        
-        return play_again_rect_screen, main_menu_rect_screen, card_x, card_y
+        return play_again_rect, main_menu_rect, card_x, card_y
         
     def draw_flash_overlay(self):
         if self.flash_alpha > 0:
@@ -646,7 +750,7 @@ class PygameRenderer:
             flash.set_alpha(self.flash_alpha)
             flash.fill(self.flash_color)
             self.screen.blit(flash, (0, 0))
-            self.flash_alpha = max(0, self.flash_alpha - 6)
+            self.flash_alpha = max(0, self.flash_alpha - 8)
     
     def draw_floating_texts(self):
         for text in self.floating_texts[:]:
@@ -664,6 +768,25 @@ class PygameRenderer:
                 self.particles.remove(particle)
             else:
                 particle.draw(self.screen)
+    
+    def draw_message_popup(self):
+        """Draw popup message for feedback"""
+        if self.message and self.message_timer > 0:
+            alpha = min(255, self.message_timer * 10)
+            if self.message_surface is None or self.message_surface.get_alpha() != alpha:
+                text = get_cached_text(self.font_medium, self.message, self.message_color)
+                self.message_surface = text.copy()
+                self.message_surface.set_alpha(alpha)
+            
+            text_rect = self.message_surface.get_rect(center=(s.SCREEN_WIDTH // 2 + self.shake_offset_x, 
+                                              int(s.SCREEN_HEIGHT * 0.72) + self.shake_offset_y))
+            bg_rect = text_rect.inflate(40, 20)
+            pygame.draw.rect(self.screen, theme.COLORS["surface_dark"], bg_rect)
+            pygame.draw.rect(self.screen, self.message_color, bg_rect, 2)
+            self.screen.blit(self.message_surface, text_rect)
+            self.message_timer -= 1
+        else:
+            self.message_surface = None
             
     def draw(self, game_state, paused=False):
         if self.background:
@@ -689,8 +812,8 @@ class PygameRenderer:
         if paused:
             self.draw_pause_menu()
             
-        self.shake_offset_x = random.randint(-4, 4) if self.shake_timer > 0 else 0
-        self.shake_offset_y = random.randint(-3, 3) if self.shake_timer > 0 else 0
+        self.shake_offset_x = random.randint(-3, 3) if self.shake_timer > 0 else 0
+        self.shake_offset_y = random.randint(-2, 2) if self.shake_timer > 0 else 0
         self.shake_timer = max(0, self.shake_timer - 1)
             
         pygame.display.flip()
@@ -698,16 +821,14 @@ class PygameRenderer:
         
     def show_message(self, msg, is_error=True):
         self.message = msg
-        self.message_timer = 40
+        self.message_timer = 35
         self.message_color = theme.COLORS["error"] if is_error else theme.COLORS["success"]
         self.message_surface = None
         
         if is_error:
-            self.shake_timer = 8
-            self.flash_alpha = 30
+            self.shake_timer = 6
+            self.flash_alpha = 40
             self.flash_color = theme.COLORS["error"]
-            self.sound_manager.play("wrong")
         else:
-            self.flash_alpha = 20
+            self.flash_alpha = 30
             self.flash_color = theme.COLORS["success"]
-            self.sound_manager.play("correct")

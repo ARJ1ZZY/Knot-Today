@@ -15,7 +15,7 @@ def get_font(size):
         _font_cache[size] = pygame.font.Font(None, size)
     return _font_cache[size]
 
-def draw_main_menu(screen, high_score):
+def draw_main_menu(screen, high_score, renderer):
     categories = get_categories()
     
     font_huge = get_font(s.FONT_SIZE_HUGE)
@@ -24,10 +24,10 @@ def draw_main_menu(screen, high_score):
     font_tiny = get_font(s.FONT_SIZE_TINY)
     
     buttons = []
-    button_w = int(s.SCREEN_WIDTH * 0.25)
+    button_w = int(s.SCREEN_WIDTH * 0.22)
     button_h = int(s.SCREEN_HEIGHT * 0.07)
-    start_y = int(s.SCREEN_HEIGHT * 0.32)
-    spacing = int(s.SCREEN_HEIGHT * 0.085)
+    start_y = int(s.SCREEN_HEIGHT * 0.38)
+    spacing = int(s.SCREEN_HEIGHT * 0.09)
     
     for i, cat in enumerate(categories):
         rect = pygame.Rect(s.SCREEN_WIDTH // 2 - button_w//2, start_y + i * spacing, button_w, button_h)
@@ -39,25 +39,45 @@ def draw_main_menu(screen, high_score):
     hover_progress = {cat: 0 for cat in categories}
     hover_progress["random"] = 0
     
-    bg = create_warm_background(s.SCREEN_WIDTH, s.SCREEN_HEIGHT)
+    # Create retro background
+    bg = pygame.Surface((s.SCREEN_WIDTH, s.SCREEN_HEIGHT))
+    bg.fill(theme.COLORS["bg_primary"])
+    
+    # Draw pixel grid
+    grid_size = 64
+    for x in range(0, s.SCREEN_WIDTH, grid_size):
+        for y in range(0, s.SCREEN_HEIGHT, grid_size):
+            if (x // grid_size + y // grid_size) % 2 == 0:
+                pygame.draw.rect(bg, theme.COLORS["bg_secondary"], (x, y, grid_size, grid_size))
     
     float_phase = 0
+    last_hovered_button = None
     
     while True:
         screen.blit(bg, (0, 0))
         
+        # Draw animated hangman character on main menu
+        renderer.draw_menu_hangman()
+        
         float_phase += 0.008
         
+        # Draw title with pixel outline
         title_text = get_cached_text(font_huge, "KNOT-TODAY", theme.COLORS["accent_primary"])
-        title_rect = title_text.get_rect(center=(s.SCREEN_WIDTH // 2, int(s.SCREEN_HEIGHT * 0.1) + int(math.sin(float_phase) * 3)))
+        title_rect = title_text.get_rect(center=(s.SCREEN_WIDTH // 2, int(s.SCREEN_HEIGHT * 0.15) + int(math.sin(float_phase) * 2)))
+        # Draw outline
+        outline_offsets = [(-2, -2), (-2, 2), (2, -2), (2, 2)]
+        for ox, oy in outline_offsets:
+            outline_text = get_cached_text(font_huge, "KNOT-TODAY", theme.COLORS["border_dark"])
+            outline_rect = outline_text.get_rect(center=(title_rect.centerx + ox, title_rect.centery + oy))
+            screen.blit(outline_text, outline_rect)
         screen.blit(title_text, title_rect)
         
         high_score_text = get_cached_text(font_medium, f"HIGH SCORE: {high_score}", theme.COLORS["warning"])
-        high_score_rect = high_score_text.get_rect(center=(s.SCREEN_WIDTH // 2, int(s.SCREEN_HEIGHT * 0.2)))
+        high_score_rect = high_score_text.get_rect(center=(s.SCREEN_WIDTH // 2, int(s.SCREEN_HEIGHT * 0.26)))
         screen.blit(high_score_text, high_score_rect)
         
         subtitle_text = get_cached_text(font_small, "SELECT CATEGORY", theme.COLORS["text_secondary"])
-        subtitle_rect = subtitle_text.get_rect(center=(s.SCREEN_WIDTH // 2, int(s.SCREEN_HEIGHT * 0.27)))
+        subtitle_rect = subtitle_text.get_rect(center=(s.SCREEN_WIDTH // 2, int(s.SCREEN_HEIGHT * 0.33)))
         screen.blit(subtitle_text, subtitle_rect)
         
         mouse_pos = pygame.mouse.get_pos()
@@ -68,16 +88,23 @@ def draw_main_menu(screen, high_score):
             hover_progress[cat] = clamp(hover_progress[cat], 0, 1)
             
             t = ease_out_cubic(hover_progress[cat])
-            color = theme.COLORS["glass_light"] if t > 0.5 else theme.COLORS["glass_warm"]
-            border = theme.COLORS["accent_primary"] if t > 0.3 else theme.COLORS["glass_border"]
+            color = theme.COLORS["accent_hover"] if t > 0.5 else theme.COLORS["key_normal"]
+            border = theme.COLORS["accent_primary"] if t > 0.3 else theme.COLORS["border_light"]
             
-            scale = 1.0 + t * 0.03
+            # Play hover sound only when hover starts
+            if is_hover and last_hovered_button != cat:
+                renderer.sound_manager.play_sfx("hover")
+                last_hovered_button = cat
+            elif not is_hover and last_hovered_button == cat:
+                last_hovered_button = None
+            
+            scale = 1.0 + t * 0.02
             scaled_w = int(rect.width * scale)
             scaled_h = int(rect.height * scale)
             scaled_rect = pygame.Rect(rect.centerx - scaled_w//2, rect.centery - scaled_h//2, scaled_w, scaled_h)
             
-            from utils import draw_glass_rect
-            draw_glass_rect(screen, scaled_rect, color, 14, border_width=2, border_color=border)
+            pygame.draw.rect(screen, color, scaled_rect)
+            pygame.draw.rect(screen, border, scaled_rect, 2)
             
             display_name = cat.replace('_', ' ').title()
             text = get_cached_text(font_small, display_name, theme.COLORS["text_primary"])
@@ -89,22 +116,30 @@ def draw_main_menu(screen, high_score):
         hover_progress["random"] = clamp(hover_progress["random"], 0, 1)
         
         t = ease_out_cubic(hover_progress["random"])
-        color = theme.COLORS["glass_light"] if t > 0.5 else theme.COLORS["glass_warm"]
-        border = theme.COLORS["accent_secondary"] if t > 0.3 else theme.COLORS["glass_border"]
+        color = theme.COLORS["accent_hover"] if t > 0.5 else theme.COLORS["key_normal"]
+        border = theme.COLORS["accent_secondary"] if t > 0.3 else theme.COLORS["border_light"]
         
-        scale = 1.0 + t * 0.03
+        # Play hover sound only when hover starts
+        if is_hover and last_hovered_button != "random":
+            renderer.sound_manager.play_sfx("hover")
+            last_hovered_button = "random"
+        elif not is_hover and last_hovered_button == "random":
+            last_hovered_button = None
+        
+        scale = 1.0 + t * 0.02
         scaled_w = int(random_rect.width * scale)
         scaled_h = int(random_rect.height * scale)
         scaled_rect = pygame.Rect(random_rect.centerx - scaled_w//2, random_rect.centery - scaled_h//2, scaled_w, scaled_h)
         
-        draw_glass_rect(screen, scaled_rect, color, 14, border_width=2, border_color=border)
+        pygame.draw.rect(screen, color, scaled_rect)
+        pygame.draw.rect(screen, border, scaled_rect, 2)
         
         text = get_cached_text(font_small, "RANDOM", theme.COLORS["text_primary"])
         text_rect = text.get_rect(center=scaled_rect.center)
         screen.blit(text, text_rect)
         
-        controls_text = get_cached_text(font_tiny, "ESC: EXIT  |  F11: FULLSCREEN", theme.COLORS["text_muted"])
-        controls_rect = controls_text.get_rect(center=(s.SCREEN_WIDTH // 2, s.SCREEN_HEIGHT - 30))
+        controls_text = get_cached_text(font_tiny, "ESC:EXIT  |  F11:FULLSCREEN", theme.COLORS["text_muted"])
+        controls_rect = controls_text.get_rect(center=(s.SCREEN_WIDTH // 2, s.SCREEN_HEIGHT - 25))
         screen.blit(controls_text, controls_rect)
         
         pygame.display.flip()
@@ -123,8 +158,10 @@ def draw_main_menu(screen, high_score):
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 for rect, cat in buttons:
                     if rect.collidepoint(mouse_pos):
+                        renderer.sound_manager.play_sfx("hover")
                         return cat, cat
                 if random_rect.collidepoint(mouse_pos):
+                    renderer.sound_manager.play_sfx("hover")
                     return None, "random"
 
 def toggle_fullscreen():
@@ -152,10 +189,16 @@ def handle_resize(width, height):
     return screen
 
 def show_end_screen(renderer, game, high_score, current_category):
-    """Show end screen and return 'play_again', 'menu', or 'quit'"""
     secret_word = game.secret_word
     is_high_score = game.won and game.score >= high_score
     waiting = True
+    
+    # Stop soundtrack when showing end screen
+    renderer.sound_manager.stop_music()
+    
+    # Play appropriate end screen sound
+    if not game.won:
+        renderer.sound_manager.play_sfx("fail")
     
     while waiting:
         play_again_rect, main_menu_rect, card_x, card_y = renderer.draw_end_screen(
@@ -173,34 +216,40 @@ def show_end_screen(renderer, game, high_score, current_category):
                 renderer.update_layout()
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
+                    renderer.sound_manager.play_sfx("hover")
                     return "menu"
                 if event.key == pygame.K_SPACE:
+                    renderer.sound_manager.play_sfx("hover")
                     return "play_again"
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_x, mouse_y = event.pos
                 if play_again_rect.collidepoint(mouse_x, mouse_y):
+                    renderer.sound_manager.play_sfx("hover")
                     return "play_again"
                 if main_menu_rect.collidepoint(mouse_x, mouse_y):
+                    renderer.sound_manager.play_sfx("hover")
                     return "menu"
     
     return "menu"
 
 def main():
-    pygame.display.set_caption("KNOT-TODAY")
+    pygame.display.set_caption("KNOT-TODAY - 8-BIT EDITION")
     
     screen = pygame.display.set_mode((s.BASE_WIDTH, s.BASE_HEIGHT), pygame.RESIZABLE)
     
     renderer = PygameRenderer(screen)
     high_score = load_high_score()
     
+    # Start playing soundtrack on dedicated music channel
+    renderer.sound_manager.play_music("soundtrack", loop=True)
+    
     game = None
     current_category = None
     running = True
     
     while running:
-        # Main Menu
         if game is None:
-            result, mode = draw_main_menu(screen, high_score)
+            result, mode = draw_main_menu(screen, high_score, renderer)
             
             if result is None and mode is None:
                 break
@@ -225,10 +274,11 @@ def main():
             renderer.hangman_animation.reset()
             renderer.floating_texts.clear()
             renderer.particles.clear()
+            
+            # Resume soundtrack when starting new game
+            renderer.sound_manager.play_music("soundtrack", loop=True)
         
-        # Gameplay
         while game is not None and not game.game_over and running:
-            # Handle events
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
@@ -251,73 +301,65 @@ def main():
                             renderer.show_message(msg, is_error=not success)
                             if success and points > 0:
                                 center_x = s.SCREEN_WIDTH // 2
-                                center_y = int(s.SCREEN_HEIGHT * 0.55)
+                                center_y = int(s.SCREEN_HEIGHT * 0.48)
                                 renderer.on_correct_guess(points, center_x, center_y)
                             elif not success:
                                 if letter in renderer.buttons:
                                     btn_rect = renderer.buttons[letter]
                                     renderer.on_wrong_guess(btn_rect.centerx, btn_rect.centery)
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    # Check keyboard buttons
                     for letter, rect in renderer.buttons.items():
                         if rect.collidepoint(event.pos) and letter not in game.guessed_letters:
                             success, msg, points, _ = game.guess(letter, is_hint_guess=False)
                             renderer.show_message(msg, is_error=not success)
                             if success and points > 0:
                                 center_x = s.SCREEN_WIDTH // 2
-                                center_y = int(s.SCREEN_HEIGHT * 0.55)
+                                center_y = int(s.SCREEN_HEIGHT * 0.48)
                                 renderer.on_correct_guess(points, center_x, center_y)
                             elif not success:
                                 renderer.on_wrong_guess(rect.centerx, rect.centery)
                             break
                     
-                    # Check hint button
                     hint_button_rect = pygame.Rect(
-                        s.SCREEN_WIDTH - int(s.SCREEN_WIDTH * 0.08) - int(s.SCREEN_WIDTH * 0.02),
-                        int(s.SCREEN_HEIGHT * 0.26),
-                        int(s.SCREEN_WIDTH * 0.08), int(s.SCREEN_HEIGHT * 0.05)
+                        s.SCREEN_WIDTH - 85, 190, 70, 35
                     )
                     if hint_button_rect.collidepoint(event.pos):
                         if game.can_afford_hint():
+                            renderer.sound_manager.play_sfx("hint")
                             hint_letter, msg = game.use_hint()
                             if hint_letter:
                                 renderer.show_message(msg, is_error=False)
                                 success, guess_msg, points, _ = game.guess(hint_letter, is_hint_guess=True)
                                 if success:
-                                    renderer.show_message(f"Revealed: {hint_letter}", is_error=False)
+                                    renderer.show_message(f"REVEALED: {hint_letter}", is_error=False)
                                 else:
                                     renderer.show_message(guess_msg, is_error=True)
                             else:
                                 renderer.show_message(msg, is_error=True)
                         else:
-                            renderer.show_message(f"NEED {game.hint_cost} POINTS", is_error=True)
+                            renderer.show_message(f"NEED {game.hint_cost} PTS", is_error=True)
                     
-                    # Check menu button
                     menu_button_rect = pygame.Rect(
-                        s.SCREEN_WIDTH - int(s.SCREEN_WIDTH * 0.08) - int(s.SCREEN_WIDTH * 0.02),
-                        int(s.SCREEN_HEIGHT * 0.19),
-                        int(s.SCREEN_WIDTH * 0.08), int(s.SCREEN_HEIGHT * 0.05)
+                        s.SCREEN_WIDTH - 85, 145, 70, 35
                     )
                     if menu_button_rect.collidepoint(event.pos):
+                        renderer.sound_manager.play_sfx("hover")
                         game = None
                         break
             
-            # Update high score if game finished
             if game and game.game_over:
                 if game.won and game.score > high_score:
                     high_score = game.score
                     save_high_score(high_score)
                 if game.won:
-                    renderer.sound_manager.play("win")
+                    renderer.sound_manager.play_sfx("win")
                 else:
-                    renderer.sound_manager.play("lose")
+                    renderer.sound_manager.play_sfx("lose")
                 break
             
-            # Draw game
             if game and not game.game_over:
                 renderer.draw(game.get_status(), paused=False)
         
-        # Game Over - Show end screen for BOTH win AND loss
         if game is not None and game.game_over and running:
             choice = show_end_screen(renderer, game, high_score, current_category)
             
@@ -327,9 +369,11 @@ def main():
                 renderer.hangman_animation.reset()
                 renderer.floating_texts.clear()
                 renderer.particles.clear()
+                renderer.sound_manager.play_music("soundtrack", loop=True)
                 continue
             elif choice == "menu":
                 game = None
+                renderer.sound_manager.play_music("soundtrack", loop=True)
                 continue
             elif choice == "quit":
                 running = False

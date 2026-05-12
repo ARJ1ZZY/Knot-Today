@@ -1,43 +1,51 @@
-# theme.py
+# theme.py - Retro 8-Bit Color Scheme
 COLORS = {
-    "bg_deep": (44, 28, 58),
-    "bg_mid": (71, 45, 78),
-    "bg_light": (108, 67, 92),
-    "bg_warm": (158, 92, 98),
-    "nebula_deep": (8, 12, 36),
-    "nebula_mid": (22, 28, 68),
-    "nebula_light": (45, 52, 105),
-    "nebula_accent": (88, 101, 242),
-    "accent_primary": (255, 165, 94),
-    "accent_secondary": (255, 140, 110),
-    "accent_soft": (255, 200, 150),
-    "accent_glow": (255, 180, 120),
-    "violet_deep": (46, 16, 56),
-    "violet_glow": (138, 79, 255),
-    "cyan_glow": (0, 255, 255),
-    "text_primary": (255, 255, 255),
-    "text_secondary": (200, 210, 255),
-    "text_muted": (120, 130, 180),
-    "text_dark": (60, 45, 55),
-    "error": (255, 71, 87),
-    "success": (46, 213, 115),
-    "warning": (255, 184, 43),
-    "info": (100, 181, 246),
-    "glass_dark": (20, 25, 60, 180),
-    "glass_medium": (30, 38, 80, 200),
-    "glass_light": (50, 60, 110, 220),
-    "glass_warm": (180, 140, 120, 180),
-    "glass_border": (100, 120, 200, 60),
-    "shadow": (0, 0, 0, 100),
-    "overlay": (0, 0, 0, 160),
-    "highlight": (255, 245, 235, 60)
+    # Retro 8-bit palette
+    "bg_primary": (28, 28, 32),        # Charcoal black #1C1C20
+    "bg_secondary": (20, 20, 24),      # Darker charcoal #141418
+    "bg_tertiary": (40, 40, 44),       # Light charcoal #28282C
+    
+    # Text colors
+    "text_primary": (240, 240, 240),   # Almost white #F0F0F0
+    "text_secondary": (180, 180, 180), # Gray #B4B4B4
+    "text_muted": (100, 100, 110),     # Muted gray #64646E
+    
+    # Accent colors
+    "accent_primary": (200, 40, 40),   # Deep red #C82828
+    "accent_secondary": (180, 30, 30), # Darker red #B41E1E
+    "accent_hover": (220, 60, 60),     # Bright red on hover #DC3C3C
+    "accent_disabled": (80, 30, 30),   # Dim red #501E1E
+    
+    # Status colors (8-bit style)
+    "success": (80, 200, 80),          # Pixel green #50C850
+    "error": (220, 50, 50),            # Pixel red #DC3232
+    "warning": (220, 180, 50),         # Pixel yellow #DCB432
+    
+    # UI element colors
+    "border_light": (80, 80, 90),      # #50505A
+    "border_dark": (15, 15, 20),       # #0F0F14
+    "surface_dark": (25, 25, 32),      # #191920
+    "surface_light": (50, 50, 60),     # #32323C
+    
+    # Keyboard specific
+    "key_normal": (35, 35, 42),        # #23232A
+    "key_hover": (55, 55, 65),         # #373741
+    "key_pressed": (25, 25, 32),       # #191920
+    "key_disabled": (20, 20, 28),      # #14141C
+    "key_text": (220, 220, 220),       # #DCDCDC
+    "key_text_disabled": (80, 80, 90), # #50505A
+    
+    # Shadow and overlay
+    "shadow": (0, 0, 0, 180),
+    "overlay": (0, 0, 0, 220),
+    "pixel_outline": (0, 0, 0, 255)
 }
 
 ANIMATION = {
-    "button_hover_scale": 1.05,
-    "button_press_scale": 0.95,
+    "button_hover_scale": 1.02,
+    "button_press_scale": 0.98,
     "popup_duration": 45,
-    "shake_intensity": 4,
-    "float_speed": 0.015,
-    "particle_count": 12
+    "shake_intensity": 3,
+    "float_speed": 0.01,
+    "particle_count": 6
 }

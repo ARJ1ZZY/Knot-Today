@@ -21,17 +21,15 @@ class PygameRenderer:
         self.ui_buttons = []
 
     def _create_keyboard_buttons(self):
-        buttons = {}
+        width, height = pygame.display.get_surface().get_size()
+        button_width = width // 20
+        button_height = height // 15
+        margin = button_width // 5
+        start_y = height - 200
+
         letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         rows = [letters[0:10], letters[10:20], letters[20:]]
-
-        width, height = self.screen.get_size()
-
-        button_width = width // 20        # scales with screen width
-        button_height = height // 15      # scales with screen height
-        margin = button_width // 5        
-
-        start_y = height - 200
+        buttons = {}
 
         for row_idx, row_letters in enumerate(rows):
             row_count = len(row_letters)
@@ -41,29 +39,11 @@ class PygameRenderer:
 
             for col, letter in enumerate(row_letters):
                 x = row_start_x + col * (button_width + margin)
-
-                # Explicit use of center=
                 rect = pygame.Rect(0, 0, button_width, button_height)
-                rect = rect.copy()  # ensure we have a rect object
                 rect.center = (x + button_width // 2, y + button_height // 2)
-
                 buttons[letter] = rect
 
         return buttons
-
-    def draw(self):
-        # Recalculate buttons every frame so they adapt to screen size
-        self.buttons = self._create_keyboard_buttons()
-
-        # ... rest of your draw code
-        for letter, rect in self.buttons.items():
-            pygame.draw.rect(self.screen, theme.COLORS["accent"], rect, 2)
-            text = self.font_small.render(letter, True, theme.COLORS["text_primary"])
-            text_rect = text.get_rect(center=rect.center)  # explicit center use
-            self.screen.blit(text, text_rect)
-
-        # draw other UI elements (word display, wrong guesses, etc.)
-        pygame.display.flip()
 
     def draw_hangman(self, lives, max_lives):
         width, height = self.screen.get_size()
@@ -295,22 +275,26 @@ class PygameRenderer:
         self.screen.blit(text, text_rect)
     
     def add_pause_menu_buttons(self):
+        # Get current window size
+        width, height = self.screen.get_size()
+
         # Darken background overlay
-        overlay = pygame.Surface((s.SCREEN_WIDTH, s.SCREEN_HEIGHT))
-        overlay.set_alpha(180)  # transparency (0 = fully transparent, 255 = fully opaque)
+        overlay = pygame.Surface((width, height))
+        overlay.set_alpha(180)  # transparency
         overlay.fill((0, 0, 0))  # black overlay
         self.screen.blit(overlay, (0, 0))
 
         # PAUSED text
         pause_text = self.font_large.render("PAUSED", True, theme.COLORS["text_primary"])
-        rect = pause_text.get_rect(center=(s.SCREEN_WIDTH // 2, s.SCREEN_HEIGHT // 2 - 100))
+        rect = pause_text.get_rect(center=(width // 2, height // 2 - 100))
         self.screen.blit(pause_text, rect)
-        
+
         # buttons
-        resume_rect = pygame.Rect(s.SCREEN_WIDTH // 2 - 100, s.SCREEN_HEIGHT // 2 - 50, 200, 45)
-        restart_rect = pygame.Rect(s.SCREEN_WIDTH // 2 - 100, s.SCREEN_HEIGHT // 2, 200, 45)
-        menu_rect = pygame.Rect(s.SCREEN_WIDTH // 2 - 100, s.SCREEN_HEIGHT // 2 + 50, 200, 45)
+        resume_rect = pygame.Rect(width // 2 - 100, height // 2 - 50, 200, 45)
+        restart_rect = pygame.Rect(width // 2 - 100, height // 2, 200, 45)
+        menu_rect = pygame.Rect(width // 2 - 100, height // 2 + 50, 200, 45)
         buttons = [("resume", resume_rect), ("restart", restart_rect), ("main_menu", menu_rect)]
+
         for action, rect in buttons:
             self.ui_buttons.append((action, rect))
             color = theme.COLORS["button_hover"] if rect.collidepoint(pygame.mouse.get_pos()) else theme.COLORS["button"]
@@ -321,10 +305,14 @@ class PygameRenderer:
             self.screen.blit(text, text_rect)
     
     def add_game_over_buttons(self):
+        # Get current window size
+        width, height = self.screen.get_size()
+
         # buttons
-        restart_rect = pygame.Rect(s.SCREEN_WIDTH // 2 - 100, s.SCREEN_HEIGHT // 2 + 50, 200, 45)
-        menu_rect = pygame.Rect(s.SCREEN_WIDTH // 2 - 100, s.SCREEN_HEIGHT // 2 + 100, 200, 45)
+        restart_rect = pygame.Rect(width // 2 - 100, height // 2 + 50, 200, 45)
+        menu_rect = pygame.Rect(width // 2 - 100, height // 2 + 100, 200, 45)
         buttons = [("restart", restart_rect), ("main_menu", menu_rect)]
+
         for action, rect in buttons:
             self.ui_buttons.append((action, rect))
             color = theme.COLORS["button_hover"] if rect.collidepoint(pygame.mouse.get_pos()) else theme.COLORS["button"]

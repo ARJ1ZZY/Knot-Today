@@ -18,21 +18,26 @@ def show_category_menu(renderer):
     buttons = []
     start_y = 200
     
+    # Get the current window size dynamically
+    width, height = renderer.screen.get_size()
+
     for i, cat in enumerate(categories):
-        rect = pygame.Rect(s.SCREEN_WIDTH // 2 - 100, start_y + i * 60, 200, 45)
+        rect = pygame.Rect(width // 2 - 100, start_y + i * 60, 200, 45)
         buttons.append((rect, cat))
     
-    random_rect = pygame.Rect(s.SCREEN_WIDTH // 2 - 100, start_y + len(categories) * 60, 200, 45)
+    random_rect = pygame.Rect(width // 2 - 100, start_y + len(categories) * 60, 200, 45)
     
     while True:
         renderer.screen.fill(theme.COLORS["bg_dark"])
+
+        width, height = renderer.screen.get_size()
         
         title = renderer.font_large.render("KNOT-TODAY", True, theme.COLORS["accent"])
-        title_rect = title.get_rect(center=(s.SCREEN_WIDTH // 2, 80))
+        title_rect = title.get_rect(center=(width // 2, 80))
         renderer.screen.blit(title, title_rect)
         
         subtitle = renderer.font_medium.render("Select A Theme", True, theme.COLORS["text_primary"])
-        subtitle_rect = subtitle.get_rect(center=(s.SCREEN_WIDTH // 2, 140))
+        subtitle_rect = subtitle.get_rect(center=(width // 2, 140))
         renderer.screen.blit(subtitle, subtitle_rect)
         
         mouse_pos = pygame.mouse.get_pos()
@@ -71,6 +76,7 @@ def show_category_menu(renderer):
 def main():
     pygame.init()
     screen = pygame.display.set_mode((s.SCREEN_WIDTH, s.SCREEN_HEIGHT), pygame.RESIZABLE)
+    print(screen.get_size())
     pygame.display.set_caption("Knot-Today")
     
     renderer = PygameRenderer(screen)
@@ -79,7 +85,6 @@ def main():
     sound_manager = SoundManager()
     
     running = True
-    fullscreen = False
     game = None
     start_time = 0
     paused_time = 0

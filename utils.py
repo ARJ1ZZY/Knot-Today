@@ -44,15 +44,27 @@ def get_cached_text(font, text, color, antialias=True):
 def load_word_bank(filepath="data/words.json"):
     path = Path(filepath)
     if not path.exists():
-        raise FileNotFoundError(f"Word bank missing: {filepath}")
+        default_bank = {
+            "technology": ["PYTHON", "JAVASCRIPT", "ALGORITHM", "DATABASE", "COMPILER", "VARIABLE", "FUNCTION", "INTERNET", "NETWORK", "SOFTWARE"],
+            "nature": ["MOUNTAIN", "OCEAN", "FOREST", "DESERT", "VOLCANO", "GLACIER", "WATERFALL", "EARTHQUAKE", "HURRICANE", "TORNADO"],
+            "history": ["REVOLUTION", "RENAISSANCE", "ENLIGHTENMENT", "COLONIZATION", "INDEPENDENCE", "CONSTITUTION", "DEMOCRACY", "MONARCHY", "EMPIRE", "DYNASTY"],
+            "science": ["GRAVITY", "MOLECULE", "VELOCITY", "PHOTOSYNTHESIS", "ATOM", "NEUTRON", "ELECTRON", "QUANTUM", "GALAXY", "NEBULA"]
+        }
+        path.parent.mkdir(exist_ok=True)
+        with open(path, 'w') as f:
+            json.dump(default_bank, f)
+        return default_bank
+    
     with open(path, 'r') as f:
         return json.load(f)
 
 def get_random_word(category=None):
     bank = load_word_bank()
+    
     if category and category in bank:
         words = bank[category]
         return random.choice(words).upper(), category
+    
     all_categories = list(bank.keys())
     chosen_category = random.choice(all_categories)
     return random.choice(bank[chosen_category]).upper(), chosen_category

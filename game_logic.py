@@ -46,7 +46,6 @@ class HangmanGame:
         self.newly_revealed_positions = [i for i, ch in enumerate(self.secret_word) if ch == letter]
         count = len(self.newly_revealed_positions)
         
-        # ONLY add points if this is NOT a hint guess
         if not is_hint_guess:
             self.streak += 1
             points = calculate_points(self.secret_word, True, self.streak) * count
